@@ -17,7 +17,7 @@ EOL2 = 0
 
 
 class Scorer(chainer.Chain):
-    """encoder hidden statesとdecoder hidden stateのスコア関数"""
+    #encoder hidden statesとdecoder hidden stateのスコア関数
     def __init__(self, enc_n_units, dec_n_units, attn_n_units):
         super(Scorer, self).__init__()
         with self.init_scope():
@@ -28,11 +28,11 @@ class Scorer(chainer.Chain):
         
         self.attn_n_units = attn_n_units
             
-    def dot(self, eh, dh_t):
-        return F.matmul(eh, dh_t[:, None])
+    def dot(self, ehs, dhs):
+        return F.matmul(ehs, dhs[:, None])
     
-    def general(self, eh, dh_t):
-        return F.matmul(eh, self.W_a(dh_t[None,:]).T)
+    def general(self, ehs, dhs):
+        return F.matmul(ehs, self.W_a(dhs[None,:]).T)
         
     def concat(self, ehs, dhs):
         # ehs: (batchsize, enc_max_length, enc_hidden_units)
@@ -107,7 +107,9 @@ class Attention(chainer.Chain):
         # score[i]: (dec_max_length, enc_max_length)
         score = self.scorer.concat(ehs, dhs)
         for s, e_l, d_l in zip(score, e_len, d_len):
-            s[d_l:, e_l:].data -= 1024
+            print('aaa', s[d_l:, e_l:].data)
+            s[d_l:].data -= 1e30
+            s[:, e_l:].data -= 1e30
         score = F.pad_sequence(score)
         # alp: (batchsize, dec_max_length, enc_max_length)
         alp = F.softmax(score, axis=2)
@@ -139,7 +141,7 @@ class Attention(chainer.Chain):
 
 class Model(chainer.Chain):
 
-    def __init__(self, source_w2id, target_w2id, n_layers, n_units, attn_n_units, eta):
+    def __init__(self, source_w2id, target_w2id, n_layers, n_units, attn_n_units, eta, dropout):
         n_source_vocab = len(source_w2id)
         n_target_vocab = len(target_w2id)
         n_label1 = 3
@@ -149,9 +151,9 @@ class Model(chainer.Chain):
         with self.init_scope():
             self.embed_x = L.EmbedID(n_source_vocab, n_units)
             self.embed_y = L.EmbedID(n_target_vocab, n_units)
-            self.encoder = L.NStepLSTM(n_layers, n_units, n_units, dropout=0.5)
-            self.decoder1 = L.NStepLSTM(n_layers, n_units, n_units, dropout=0.5)
-            self.decoder2 = L.NStepLSTM(n_layers, n_units, n_units, dropout=0.5)
+            self.encoder = L.NStepLSTM(n_layers, n_units, n_units, dropout=dropout)
+            self.decoder1 = L.NStepLSTM(n_layers, n_units, n_units, dropout=dropout)
+            self.decoder2 = L.NStepLSTM(n_layers, n_units, n_units, dropout=dropout)
             self.W_y = L.Linear(n_units, n_target_vocab)
             self.W_l1 = L.Linear(n_units, n_label1)
             self.W_l2 = L.Linear(n_units, n_label2)

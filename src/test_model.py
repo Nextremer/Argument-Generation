@@ -1,18 +1,31 @@
 from model import *
 import numpy as np
 import unittest
+import random
+import chainer
+from chainer.cuda import cupy as cp
+from chainer import cuda
 
 np.random.seed(1234)
+random.seed(1234)
+if chainer.cuda.available:
+    chainer.cuda.cupy.random.seed(1234)
 
 class AttentionTest(unittest.TestCase):
     
     def test_attention(self):
-        attention = Attention(200, 150)
-        ehs = [np.random.randn(10, 400).astype(np.float32), np.random.randn(9, 400).astype(np.float32)]
-        dhs = [np.random.randn(8, 200).astype(np.float32), np.random.randn(7, 200).astype(np.float32)]
+        attention = Attention(400, 200, 150)
+        backends.cuda.get_device(0).use()
+        attention.to_gpu(0)
+        ehs = [cp.random.randn(10, 400).astype(cp.float32), cp.random.randn(9, 400).astype(cp.float32)]
+        dhs = [cp.random.randn(8, 200).astype(cp.float32), cp.random.randn(7, 200).astype(cp.float32)]
         result = attention(ehs, dhs)
-        self.assertTrue(all(np.isclose(result[0].data[0][:3], [0.2097658,  -0.13039063,  0.36767963])))
-        self.assertTrue(all(np.isclose(result[1].data[-1][-3:], [0.20084219, -0.43477857,  0.7479435])))
+        print(result[0].data[0][:3])
+        print([-0.52674127, -0.12444207 , 0.7915659 ])
+        print(result[1].data[-1][-3:])
+        print([-0.2755296,   0.47057515,  0.1896592 ])
+        self.assertTrue(all(np.isclose(cuda.to_cpu(result[0].data[0][:3]), [-0.52674127, -0.12444207 , 0.7915659 ])))
+        self.assertTrue(all(np.isclose(cuda.to_cpu(result[1].data[-1][-3:]), [-0.2755296,   0.47057515,  0.1896592 ])))
 
         
         

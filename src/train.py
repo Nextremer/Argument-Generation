@@ -30,6 +30,18 @@ def get_train_test_idxs(path):
             
 
 def main(args):
+    # save args
+    if args.save_dir:
+        save_args(
+            args.save_dir,
+            args.n_layers, 
+            args.n_units, 
+            args.attn_n_units,
+            args.eta, 
+            args.max_epoch, 
+            args.mb_size, 
+            args.dropout)
+            
     # load data(tokenized word) 
     topics = load_data(args.data_dir+'topics.pickle')
     contexts = load_data(args.data_dir+'contexts.pickle')
@@ -81,7 +93,8 @@ def main(args):
                 args.n_layers, 
                 args.n_units, 
                 args.attn_n_units, 
-                args.eta)
+                args.eta,
+                args.dropout)
     
     # Use GPU
     if args.gpu >= 0:
@@ -131,6 +144,7 @@ def main(args):
         idxs = [0, 50, 100, 150, 200, 250, 300]
         arguments = []
         for idx in idxs:
+            print('train')
             print('topic:')
             topic = ''
             for i in train_topics[idx]:
@@ -141,8 +155,8 @@ def main(args):
             argument = model.generate([train_topics[idx]])
             print(argument)
             arguments.append((topic, argument[0]))
-            if args.gen_path:
-                with open(args.gen_path, 'a') as f:
+            if args.save_dir:
+                with open(args.save_dir+'arguments.txt', 'a') as f:
                     f.write('-'*50+'\n')
                     f.write('train\n')
                     f.write('epoch: '+str(epoch+1)+'\n')
@@ -170,6 +184,7 @@ def main(args):
         # generate argument(test)
         idxs = [0, 5, 10, 15, 20, 25, 30]
         for idx in idxs:
+            print('test')
             print('topic:')
             topic = ''
             for i in test_topics[idx]:
@@ -179,8 +194,8 @@ def main(args):
             print('generated argument:')
             argument = model.generate([test_topics[idx]])
             print(argument)
-            if args.gen_path:
-                with open(args.gen_path, 'a') as f:
+            if args.save_dir:
+                with open(args.save_dir+'arguments.txt', 'a') as f:
                     f.write('-'*50+'\n')
                     f.write('test\n')
                     f.write('epoch: '+str(epoch+1)+'\n')
@@ -197,8 +212,8 @@ def main(args):
         test_loss_reporter = ScoreReporter(args.mb_size, test_size)
         test_acc_reporter = ScoreReporter(args.mb_size, test_size)
         
-        # save figs
         if args.save_dir:
+            # save figs
             save_figs(
                 args.save_dir, epoch+1, train_mean_losses, test_mean_losses, \
                 train_mean_accs, test_mean_accs)
@@ -213,14 +228,14 @@ if __name__ == '__main__':
     parser.add_argument('--data_dir', help='data directory')
     parser.add_argument('--idx_path', help='train test idx file')
     parser.add_argument('--save_dir', help='save figures directory')
-    parser.add_argument('--gen_path', help='generated argument path')
     parser.add_argument('--gpu', type=int, default=-1, help='GPU ID (negative value indicates CPU)')
-    parser.add_argument('--n_layers', type=int, default=2)
+    parser.add_argument('--n_layers', type=int, default=3)
     parser.add_argument('--n_units', type=int, default=200)
     parser.add_argument('--attn_n_units', type=int, default=150)
     parser.add_argument('--eta', type=float, default=1.0)
     parser.add_argument('--max_epoch', type=int, default=20)
-    parser.add_argument('--mb_size', type=int, default=32)
+    parser.add_argument('--mb_size', type=int, default=16)
+    parser.add_argument('--dropout', type=float, default=0.5)
     args = parser.parse_args()
     
     main(args)

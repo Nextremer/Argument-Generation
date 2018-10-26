@@ -18,14 +18,14 @@ EOL2 = 0
 
 class Scorer(chainer.Chain):
     """encoder hidden statesとdecoder hidden stateのスコア関数"""
-    def __init__(self, n_units, attn_n_units):
+    def __init__(self, enc_n_units, dec_n_units, attn_n_units):
         super(Scorer, self).__init__()
         with self.init_scope():
-            self.W_a = L.Linear(n_units, n_units)
-            self.W_e = L.Linear(n_units*2, attn_n_units)
-            self.W_d = L.Linear(n_units, attn_n_units)
+            self.W_a = L.Linear(dec_n_units, enc_n_units)
+            self.W_e = L.Linear(enc_n_units, attn_n_units)
+            self.W_d = L.Linear(dec_n_units, attn_n_units)
             self.v = L.Linear(attn_n_units, 1)
-            
+        
     def dot(self, eh, dh_t):
         return F.matmul(eh, dh_t[:, None])
     
@@ -44,11 +44,11 @@ class Scorer(chainer.Chain):
 
 class Attention(chainer.Chain):
     
-    def __init__(self, n_units, attn_n_units):
+    def __init__(self, enc_n_units, dec_n_units, attn_n_units):
         super(Attention, self).__init__()
         with self.init_scope():
-            self.W = L.Linear(n_units+n_units*2, n_units)
-            self.scorer = Scorer(n_units, attn_n_units)
+            self.W = L.Linear(enc_n_units+dec_n_units, dec_n_units)
+            self.scorer = Scorer(enc_n_units, dec_n_units, attn_n_units)
             
     def __call__(self, ehs, dhs):
         attn_hs = []

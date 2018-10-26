@@ -1,6 +1,7 @@
 # -*- coding:utf-8 -*-
 import numpy as np
 import matplotlib.pyplot as plt
+import json
 
 def get_wid_seq(x, w2id, is_make=None):
     if is_make:
@@ -49,4 +50,12 @@ def save_figs(save_dir, current_epoch, train_mean_losses, test_mean_losses, \
     plt.savefig(save_dir+'mean_accuracies:{}.png'.format(current_epoch))
 
 
-
+def save_args(save_dir, *args):
+    keys = ["n_layers", "n_units", "attn_n_units", "eta", "max_epoch", "mb_size", "dropout"]
+    assert len(args) == len(keys)
+    args_dict = {k: a for k, a in zip(keys, args)}
+    
+    f = open(save_dir+'args.json', 'w')
+    json.dump(args_dict, f)
+        
+    
