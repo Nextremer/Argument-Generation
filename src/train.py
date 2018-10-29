@@ -172,8 +172,7 @@ def main(args):
         train_loss_reporter = ScoreReporter(args.mb_size, train_size)
                 
         # generate argument(test)
-        idxs = [0, 5, 10, 15, 20, 25, 30]
-        for idx in idxs:
+        for idx in range(test_size):
             print('-'*50)
             print('test')
             print('topic:')
