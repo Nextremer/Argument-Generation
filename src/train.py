@@ -107,12 +107,12 @@ def main(args):
     optimizer.add_hook(chainer.optimizer.GradientClipping(5.0))
     
     # initialize reporter
-    train_loss1_reporter = ScoreReporter(args.mb_size, train_size)
-    train_loss23_reporter = ScoreReporter(args.mb_size, train_size)
+    train_loss_w_reporter = ScoreReporter(args.mb_size, train_size)
+    train_loss_label_reporter = ScoreReporter(args.mb_size, train_size)
     train_loss_reporter = ScoreReporter(args.mb_size, train_size)
     
-    train_mean_losses1 = []
-    train_mean_losses23 = []
+    train_mean_losses_w = []
+    train_mean_losses_label = []
     train_mean_losses = []
     
     # train test loop
@@ -127,17 +127,17 @@ def main(args):
             
             model.cleargrads()
             loss1, loss2, loss3, loss = model(train_topic_mb, train_context_mb, (train_bio_mb, train_type_mb))
-            train_loss1_reporter.add(backends.cuda.to_cpu(loss1.data))
-            train_loss23_reporter.add(backends.cuda.to_cpu(args.eta*(loss2.data+loss3.data)))
+            train_loss_w_reporter.add(backends.cuda.to_cpu(loss1.data))
+            train_loss_label_reporter.add(backends.cuda.to_cpu(args.eta*(loss2.data+loss3.data)))
             train_loss_reporter.add(backends.cuda.to_cpu(loss.data))
             loss.backward()
             optimizer.update()
         
-        train_mean_losses1.append(train_loss1_reporter.mean())
-        train_mean_losses23.append(train_loss23_reporter.mean())
+        train_mean_losses_w.append(train_loss_w_reporter.mean())
+        train_mean_losses_label.append(train_loss_label_reporter.mean())
         train_mean_losses.append(train_loss_reporter.mean())
-        print('train mean loss1: {}'.format(train_loss1_reporter.mean()))
-        print('train mean eta*(loss2 + loss3): {}'.format(train_loss23_reporter.mean()))
+        print('train mean loss word: {}'.format(train_loss_w_reporter.mean()))
+        print('train mean loss eta*(loss2 + loss3): {}'.format(train_loss_label_reporter.mean()))
         print('train mean loss: {}'.format(train_loss_reporter.mean()))
         
         # generate argument(train)
@@ -167,8 +167,8 @@ def main(args):
         print('-'*50)
         
         # initialize train reporter
-        train_loss1_reporter = ScoreReporter(args.mb_size, train_size)
-        train_loss23_reporter = ScoreReporter(args.mb_size, train_size)
+        train_loss_w_reporter = ScoreReporter(args.mb_size, train_size)
+        train_loss_label_reporter = ScoreReporter(args.mb_size, train_size)
         train_loss_reporter = ScoreReporter(args.mb_size, train_size)
                 
         # generate argument(test)
@@ -196,7 +196,7 @@ def main(args):
         if args.save_dir:
             # save figs
             save_figs(
-                args.save_dir, epoch+1, train_mean_losses, train_mean_losses1, train_mean_losses23)
+                args.save_dir, epoch+1, train_mean_losses, train_mean_losses_w, train_mean_losses_label)
             
         end_time = time.time()
         print('elapsed time:{}'.format(end_time-start_time))
