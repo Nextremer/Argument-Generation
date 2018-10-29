@@ -107,7 +107,6 @@ class Attention(chainer.Chain):
         # score[i]: (dec_max_length, enc_max_length)
         score = self.scorer.concat(ehs, dhs)
         for s, e_l, d_l in zip(score, e_len, d_len):
-            print('aaa', s[d_l:, e_l:].data)
             s[d_l:].data -= 1e30
             s[:, e_l:].data -= 1e30
         score = F.pad_sequence(score)

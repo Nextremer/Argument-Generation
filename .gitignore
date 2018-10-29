@@ -4,3 +4,4 @@ mean_accuracies:*.png
 mean_losses*.png
 /arguments.txt
 /texts
+*.bk

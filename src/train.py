@@ -110,12 +110,10 @@ def main(args):
     train_loss_reporter = ScoreReporter(args.mb_size, train_size)
     train_acc_reporter = ScoreReporter(args.mb_size, train_size)
     test_loss_reporter = ScoreReporter(args.mb_size, test_size)
-    test_acc_reporter = ScoreReporter(args.mb_size, test_size)
     
     train_mean_losses = []
     train_mean_accs = []
     test_mean_losses = []
-    test_mean_accs = []
     
     # train test loop
     for epoch in range(args.max_epoch):
@@ -177,10 +175,8 @@ def main(args):
             
             with chainer.no_backprop_mode(), chainer.using_config('train', False):
                 loss1, loss2, loss3, loss = model(test_topic_mb, test_context_mb, (test_bio_mb, test_type_mb))
-                acc = model.get_accuracy(test_topic_mb, test_context_mb, (test_bio_mb, test_type_mb))
                 test_loss_reporter.add(backends.cuda.to_cpu(loss.data))
-                test_acc_reporter.add(acc)
-        
+                
         # generate argument(test)
         idxs = [0, 5, 10, 15, 20, 25, 30]
         for idx in idxs:
@@ -203,20 +199,17 @@ def main(args):
                     f.write('argument: '+argument[0]+'\n')
                     
         test_mean_losses.append(test_loss_reporter.mean())
-        test_mean_accs.append(test_acc_reporter.mean())
         
         print('test mean loss: {}'.format(test_loss_reporter.mean()))
-        print('test mean acc: {}'.format(test_acc_reporter.mean()))
         
         # initialize test reporter
         test_loss_reporter = ScoreReporter(args.mb_size, test_size)
-        test_acc_reporter = ScoreReporter(args.mb_size, test_size)
         
         if args.save_dir:
             # save figs
             save_figs(
                 args.save_dir, epoch+1, train_mean_losses, test_mean_losses, \
-                train_mean_accs, test_mean_accs)
+                train_mean_accs)
             
         end_time = time.time()
         print('elapsed time:{}'.format(end_time-start_time))
