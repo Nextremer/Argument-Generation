@@ -227,7 +227,7 @@ class Model(chainer.Chain):
         exs = F.split_axis(ex, x_section, axis=0)
         return exs
     
-    def generate(self, xs, max_length=100):
+    def generate(self, xs, max_length):
         batchsize = len(xs)
         with chainer.no_backprop_mode(), chainer.using_config('train', False):
             xs = [self.xp.array(x[::-1]) for x in xs]

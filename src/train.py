@@ -153,7 +153,7 @@ def main(args):
                 topic += ' '
             print(topic)
             print('generated argument:')
-            argument = model.generate([train_topics[idx]])
+            argument = model.generate([train_topics[idx]], args.max_length)
             print(argument)
             arguments.append((topic, argument[0]))
             if args.save_dir:
@@ -183,7 +183,7 @@ def main(args):
                 topic += ' '
             print(topic)
             print('generated argument:')
-            argument = model.generate([test_topics[idx]])
+            argument = model.generate([test_topics[idx]], args.max_length)
             print(argument)
             if args.save_dir:
                 with open(args.save_dir+'arguments.txt', 'a') as f:
@@ -216,6 +216,7 @@ if __name__ == '__main__':
     parser.add_argument('--max_epoch', type=int, default=20)
     parser.add_argument('--mb_size', type=int, default=16)
     parser.add_argument('--dropout', type=float, default=0.5)
+    parser.add_argument('--max_length', type=int, default=100)
     args = parser.parse_args()
     
     main(args)
