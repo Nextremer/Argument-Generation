@@ -27,8 +27,7 @@ class ScoreReporter(object):
         return self.score_sum / float(n)
 
     
-def save_figs(save_dir, current_epoch, train_mean_losses, test_mean_losses, \
-              train_token_level_accs):
+def save_figs(save_dir, current_epoch, train_mean_losses, train_token_level_accs):
     plt.switch_backend('agg')
     epoch = np.arange(1, current_epoch+1)
     fig = plt.figure(1)
@@ -36,7 +35,6 @@ def save_figs(save_dir, current_epoch, train_mean_losses, test_mean_losses, \
     plt.xlabel('epoch')
     plt.ylabel('mean loss')
     plt.plot(epoch, train_mean_losses, label='train')
-    plt.plot(epoch, test_mean_losses, label='test')
     plt.legend()
     plt.savefig(save_dir+'mean_losses.{}.png'.format(current_epoch))
     
