@@ -57,7 +57,7 @@ class Scorer(chainer.Chain):
         ehs = F.concat(ehs, axis=0)
         # e: (batchsize * enc_max_length, attn_units)
         e = self.W_e(ehs)
-        # e: (batchdize, enc_max_length, attn_units)
+        # e: (batchsize, enc_max_length, attn_units)
         e = F.split_axis(e, batchsize, axis=0)
         # e: (batchsize, enc_max_length, attn_units)
         e = F.pad_sequence(e)

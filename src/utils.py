@@ -27,25 +27,20 @@ class ScoreReporter(object):
         return self.score_sum / float(n)
 
     
-def save_figs(save_dir, current_epoch, train_mean_losses, train_token_level_accs):
+def save_figs(save_dir, current_epoch, train_mean_losses, train_mean_losses1, train_mean_losses23):
     plt.switch_backend('agg')
     epoch = np.arange(1, current_epoch+1)
     fig = plt.figure(1)
     plt.title('mean losses')
     plt.xlabel('epoch')
     plt.ylabel('mean loss')
-    plt.plot(epoch, train_mean_losses, label='train')
+    plt.plot(epoch, train_mean_losses, label='loss(total)')
+    plt.plot(epoch, train_mean_losses1, label='loss(word)')
+    plt.plot(epoch, train_mean_losses23, label='loss(labels)')
     plt.legend()
     plt.savefig(save_dir+'mean_losses.{}.png'.format(current_epoch))
     
-    fig = plt.figure(2)
-    plt.title('token level accuracy')
-    plt.xlabel('epoch')
-    plt.ylabel('accuracy')
-    plt.plot(epoch, train_token_level_accs, label='train')
-    plt.legend()
-    plt.savefig(save_dir+'mean_accuracies:{}.png'.format(current_epoch))
-
+    
 
 def save_args(save_dir, *args):
     keys = ["n_layers", "n_units", "attn_n_units", "eta", "max_epoch", "mb_size", "dropout"]

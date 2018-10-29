@@ -107,11 +107,13 @@ def main(args):
     optimizer.add_hook(chainer.optimizer.GradientClipping(5.0))
     
     # initialize reporter
+    train_loss1_reporter = ScoreReporter(args.mb_size, train_size)
+    train_loss23_reporter = ScoreReporter(args.mb_size, train_size)
     train_loss_reporter = ScoreReporter(args.mb_size, train_size)
-    train_acc_reporter = ScoreReporter(args.mb_size, train_size)
     
+    train_mean_losses1 = []
+    train_mean_losses23 = []
     train_mean_losses = []
-    train_mean_accs = []
     
     # train test loop
     for epoch in range(args.max_epoch):
@@ -125,21 +127,24 @@ def main(args):
             
             model.cleargrads()
             loss1, loss2, loss3, loss = model(train_topic_mb, train_context_mb, (train_bio_mb, train_type_mb))
-            acc = model.get_accuracy(train_topic_mb, train_context_mb, (train_bio_mb, train_type_mb))
+            train_loss1_reporter.add(backends.cuda.to_cpu(loss1.data))
+            train_loss23_reporter.add(backends.cuda.to_cpu(args.eta*(loss2.data+loss3.data)))
             train_loss_reporter.add(backends.cuda.to_cpu(loss.data))
-            train_acc_reporter.add(acc)
             loss.backward()
             optimizer.update()
         
+        train_mean_losses1.append(train_loss1_reporter.mean())
+        train_mean_losses23.append(train_loss23_reporter.mean())
         train_mean_losses.append(train_loss_reporter.mean())
-        train_mean_accs.append(train_acc_reporter.mean())
+        print('train mean loss1: {}'.format(train_loss1_reporter.mean()))
+        print('train mean eta*(loss2 + loss3): {}'.format(train_loss23_reporter.mean()))
         print('train mean loss: {}'.format(train_loss_reporter.mean()))
-        print('train mean acc: {}'.format(train_acc_reporter.mean()))
         
         # generate argument(train)
         idxs = [0, 50, 100, 150, 200, 250, 300]
         arguments = []
         for idx in idxs:
+            print('-'*50)
             print('train')
             print('topic:')
             topic = ''
@@ -159,24 +164,17 @@ def main(args):
                     f.write('topic: '+topic+'\n')
                     f.write('argument: '+argument[0]+'\n')
                     
-        print('-'*30)
+        print('-'*50)
         
         # initialize train reporter
+        train_loss1_reporter = ScoreReporter(args.mb_size, train_size)
+        train_loss23_reporter = ScoreReporter(args.mb_size, train_size)
         train_loss_reporter = ScoreReporter(args.mb_size, train_size)
-        train_acc_reporter = ScoreReporter(args.mb_size, train_size)
-        
-        for mb in range(0, test_size, args.mb_size):
-            test_topic_mb = test_topics[mb:mb+args.mb_size]
-            test_context_mb = test_contexts[mb:mb+args.mb_size]
-            test_bio_mb = test_bio_seqs[mb:mb+args.mb_size]
-            test_type_mb = test_type_seqs[mb:mb+args.mb_size]
-            
-            with chainer.no_backprop_mode(), chainer.using_config('train', False):
-                loss1, loss2, loss3, loss = model(test_topic_mb, test_context_mb, (test_bio_mb, test_type_mb))
                 
         # generate argument(test)
         idxs = [0, 5, 10, 15, 20, 25, 30]
         for idx in idxs:
+            print('-'*50)
             print('test')
             print('topic:')
             topic = ''
@@ -198,7 +196,7 @@ def main(args):
         if args.save_dir:
             # save figs
             save_figs(
-                args.save_dir, epoch+1, train_mean_losses, train_mean_accs)
+                args.save_dir, epoch+1, train_mean_losses, train_mean_losses1, train_mean_losses23)
             
         end_time = time.time()
         print('elapsed time:{}'.format(end_time-start_time))
