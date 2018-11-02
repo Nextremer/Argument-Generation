@@ -9,37 +9,30 @@ import argparse
 
 
 def type_tagging(seq, match_idx, label, length):
-    """component typeのラベル付け
-
-    'None':0,
-    'Premise':1,
-    'Claim':2,
-    'MajorClaim':3
+    """
+    'None': 0
+    'B-Premise': 1
+    'I-Premise':2
+    'B-Claim':3
+    'I-Claim':4
+    'B-MajorClaim':5
+    'I-MajorClaim':6
     """
     if label == 'MajorClaim':
-        seq[match_idx:match_idx+length] = [3]*length
+        seq[match_idx] = 5
+        seq[(match_idx+1):(match_idx+length)] = [6]*(length-1)
     elif label == 'Claim':
-        seq[match_idx:match_idx+length] = [2]*length
+        seq[match_idx] = 3
+        seq[(match_idx+1):(match_idx+length)] = [4]*(length-1)
     elif label == 'Premise':
-        seq[match_idx:match_idx+length] = [1]*length
+        seq[match_idx] = 1
+        seq[(match_idx+1):(match_idx+length)] = [2]*(length-1)
     return seq
 
-
-def bio_tagging(seq, match_idx, length):
-    """BIOのラベル付け
-
-    'O':0,
-    'B':1,
-    'I':2
-    """
-    seq[match_idx] = 1
-    seq[match_idx+1:match_idx+length] = [2]*(length-1)
-    return seq
 
 
 def get_labels(context, anns, essay_num, use_lower):
-    """1つのcontextに対して、BIOとcomponent typeのラベル系列を得る"""
-    bio_seq = [0]*len(context)
+    """1つのcontextに対して、component typeのラベル系列を得る"""
     type_seq = [0]*len(context)
     for ann in anns:
         if ann[0].startswith('T'):
@@ -76,10 +69,9 @@ def get_labels(context, anns, essay_num, use_lower):
                 elif ann[0] == 'T3':
                     match_idx = match_idxs[np.argmax(match_idxs)]
         
-        bio_seq = bio_tagging(bio_seq, match_idx, pattern_length)
         type_seq = type_tagging(type_seq, match_idx, ann[1], pattern_length)
 
-    return bio_seq, type_seq
+    return type_seq
 
 
 def main(args):
@@ -94,20 +86,15 @@ def main(args):
     with open(args.save_dir+'contexts.pickle', 'wb') as f:
         pickle.dump(contexts, f)
 
-    bio_seqs = []
     type_seqs = []
     essay_num = 0
     
     for context, ann in zip(contexts, anns):
-        bio_seq, type_seq = get_labels(context, ann, essay_num, args.use_lower)
-        assert len(bio_seq) == len(type_seq)
-        bio_seqs.append(bio_seq)
+        type_seq = get_labels(context, ann, essay_num, args.use_lower)
         type_seqs.append(type_seq)
         essay_num += 1
         
-    # save bio_seqs, type_seqs
-    with open(args.save_dir+'bio_seqs.pickle', 'wb') as f:
-        pickle.dump(bio_seqs, f)
+    # save type_seqs
     with open(args.save_dir+'type_seqs.pickle', 'wb') as f:
         pickle.dump(type_seqs, f)
 
