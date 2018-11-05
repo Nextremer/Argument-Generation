@@ -12,8 +12,7 @@ import numpy as np
 
 EOS = 0
 UNK = 1
-EOL1 = 0
-EOL2 = 0
+EOL = 7
 
 
 class Scorer(chainer.Chain):
@@ -136,108 +135,94 @@ class Attention(chainer.Chain):
             attn_hs.append(h[:d_l])
 
         return attn_hs
-
+    
+    
 
 class Model(chainer.Chain):
 
-    def __init__(self, source_w2id, target_w2id, n_layers, n_units, attn_n_units, eta, dropout):
-        n_source_vocab = len(source_w2id)
-        n_target_vocab = len(target_w2id)
-        n_label1 = 3
-        n_label2 = 4
-
+    def __init__(self, w2id, id2w, w2vec, n_layers, n_units, attn_n_units, eta, dropout):
+        n_vocab = len(w2id)
+        n_label = 7
+        
+        init_W = [w2vec[id2w[i]] if id2w[i] in w2vec.keys() else np.random.normal(scale=np.sqrt(2./n_units), size=(n_units, )) \
+                  for i, w in id2w.items()]
+        init_W = np.asarray(init_W, dtype=np.float32)
+        
         super(Model, self).__init__()
         with self.init_scope():
-            self.embed_x = L.EmbedID(n_source_vocab, n_units)
-            self.embed_y = L.EmbedID(n_target_vocab, n_units)
+            self.embed = L.EmbedID(n_vocab, n_units, initialW=init_W)
             self.encoder = L.NStepLSTM(n_layers, n_units, n_units, dropout=dropout)
             self.decoder1 = L.NStepLSTM(n_layers, n_units, n_units, dropout=dropout)
             self.decoder2 = L.NStepLSTM(n_layers, n_units, n_units, dropout=dropout)
-            self.W_y = L.Linear(n_units, n_target_vocab)
-            self.W_l1 = L.Linear(n_units, n_label1)
-            self.W_l2 = L.Linear(n_units, n_label2)
+            self.W_y = L.Linear(n_units, n_vocab)
+            self.W_l = L.Linear(n_units, n_label)
             
             self.attention = Attention(n_units, n_units, attn_n_units)
             
-        self.source_id2w = {v: k for k, v in source_w2id.items()}
-        self.target_id2w = {v: k for k, v in target_w2id.items()}
+        self.w2id = w2id
+        self.id2w = id2w
+        self.w2vec = w2vec
         self.eta = eta
         
     def __call__(self, xs, ys, ls):
-        lhs, ls1_out, ls2_out, concat_os, concat_ys_out = self.forward(xs, ys, ls)
+        lhs, ls_out, concat_os, concat_ys_out = self.forward(xs, ys, ls)
         lhs = [lh[:-1] for lh in lhs]
-        ls1_out = [ls1[:-1] for ls1 in ls1_out]
-        ls2_out = [ls2[:-1] for ls2 in ls2_out]
+        ls_out = [ls[:-1] for ls in ls_out]
         
         concat_lhs = F.concat(lhs, axis=0)
-        concat_ls1_out = F.concat(ls1_out, axis=0)
-        concat_ls2_out = F.concat(ls2_out, axis=0)
+        concat_ls_out = F.concat(ls_out, axis=0)
         
         batchsize = len(xs)
         loss1 = F.sum(F.softmax_cross_entropy(self.W_y(concat_os), concat_ys_out, reduce='no'))/batchsize
-        loss2 = F.sum(F.softmax_cross_entropy(self.W_l1(concat_lhs), concat_ls1_out, reduce='no'))/batchsize
-        loss3 = F.sum(F.softmax_cross_entropy(self.W_l2(concat_lhs), concat_ls2_out, reduce='no'))/batchsize
-        loss = loss1 + self.eta * (loss2 + loss3)
+        loss2 = F.sum(F.softmax_cross_entropy(self.W_l(concat_lhs), concat_ls_out, reduce='no'))/batchsize
+        loss = loss1 + self.eta * loss2
         
-        return loss1, loss2, loss3, loss
+        return loss1, loss2, loss
 
     def forward(self, xs, ys, ls):
         xs = [self.xp.array(x[::-1], dtype=self.xp.int32) for x in xs]
         ys = [self.xp.array(y, dtype=self.xp.int32) for y in ys]
-        
-        ls1, ls2 = ls
-        ls1 = [self.xp.array(l1, dtype=self.xp.int32) for l1 in ls1]
-        ls2 = [self.xp.array(l2, dtype=self.xp.int32) for l2 in ls2]
+        ls = [self.xp.array(l, dtype=self.xp.int32) for l in ls]
         
         eos = self.xp.array([EOS], dtype=self.xp.int32)
-        eol1 = self.xp.array([EOL1], dtype=self.xp.int32)
-        eol2 = self.xp.array([EOL2], dtype=self.xp.int32)
+        eol = self.xp.array([EOL], dtype=self.xp.int32)
         
-        # decoderへの入力
         ys_in = [F.concat([eos, y], axis=0) for y in ys]
-        # decoderの目標出力
         ys_out = [F.concat([y, eos], axis=0) for y in ys]
-        # label decoderの目標出力
-        ls1_out = [F.concat([l1, eol1], axis=0) for l1 in ls1]
-        ls2_out = [F.concat([l2, eol2], axis=0) for l2 in ls2]
-        assert len(ys_out) == len(ls1_out)
-        assert len(ys_out) == len(ls2_out)
+        ls_out = [F.concat([l, eol], axis=0) for l in ls]
+        assert len(ys_out) == len(ls_out)
         
-        # 埋め込みベクトル
-        # exs: (batchsize, seq length, n_units)
-        exs = self.sequence_embed(self.embed_x, xs)
-        eys = self.sequence_embed(self.embed_y, ys_in)
+        # 埋め込み
+        exs = self.sequence_embed(self.embed, xs)
+        eys = self.sequence_embed(self.embed, ys_in)
+        
+        concat_ys_out = F.concat(ys_out, axis=0)
         
         h, c, ehs = self.encoder(None, None, exs)
         _, _, dhs = self.decoder1(h, c, eys)
-        
         yhs = self.attention(ehs, dhs)
-        
         _, _, lhs = self.decoder2(None, None, yhs)
         
         concat_yhs = F.concat(yhs, axis=0)
-        concat_ys_out = F.concat(ys_out, axis=0)
         
-        return lhs, ls1_out, ls2_out, concat_yhs, concat_ys_out
+        return lhs, ls_out, concat_yhs, concat_ys_out
 
-    def sequence_embed(self, embed, xs):
-        x_len = [len(x) for x in xs]
-        x_section = np.cumsum(x_len[:-1])
-        ex = embed(F.concat(xs, axis=0))
-        exs = F.split_axis(ex, x_section, axis=0)
-        return exs
-    
     def generate(self, xs, max_length):
         batchsize = len(xs)
         with chainer.no_backprop_mode(), chainer.using_config('train', False):
-            xs = [self.xp.array(x[::-1]) for x in xs]
-            exs = self.sequence_embed(self.embed_x, xs)
+            exs = [[F.expand_dims(self.xp.array(self.w2vec[w], dtype=self.xp.float32), axis=0)\
+                    if w not in self.w2id.keys() and w in self.w2vec.keys() \
+                    else self.embed(self.xp.array([self.w2id.get(w, UNK)], dtype=self.xp.int32)) \
+                    for w in x[::-1]] for x in xs]
+            exs = [F.concat(x, axis=0) for x in exs]
+            
             _, _, ehs = self.encoder(None, None, exs)
+            
             ys = self.xp.full(batchsize, EOS, dtype=self.xp.int32)
             h, c = None, None
             result = []
             for i in range(max_length):
-                eys = self.embed_y(ys)
+                eys = self.embed(ys)
                 eys = F.split_axis(eys, batchsize, axis=0)
                 h, c, dhs = self.decoder1(h, c, eys)
                 yhs = self.attention(ehs, dhs)
@@ -256,27 +241,29 @@ class Model(chainer.Chain):
                 y = y[:inds[0, 0]]
             s = ''
             for i in y:
-                s += self.target_id2w.get(i, '<unk>')
+                s += self.id2w.get(i, 'unk')
                 s += ' '
             outs.append(s)
                 
         return outs
     
+    def sequence_embed(self, embed, xs):
+        x_len = [len(x) for x in xs]
+        x_section = np.cumsum(x_len[:-1])
+        ex = embed(F.concat(xs, axis=0))
+        exs = F.split_axis(ex, x_section, axis=0)
+        return exs
+    
     def get_accuracy(self, xs, ys, ls):
-        lhs, ls1_out, ls2_out, _, _ = self.forward(xs, ys, ls)
+        lhs, ls_out, _, _ = self.forward(xs, ys, ls)
         lhs = [lh[:-1] for lh in lhs]
-        ls1_out = [ls1[:-1] for ls1 in ls1_out]
-        ls2_out = [ls2[:-1] for ls2 in ls2_out]
+        ls_out = [ls[:-1] for ls in ls_out]
         
         concat_lhs = F.concat(lhs, axis=0)
-        concat_ls1_out = F.concat(ls1_out, axis=0)
-        concat_ls2_out = F.concat(ls2_out, axis=0)
-
-        ls1_pred = F.argmax(self.W_l1(concat_lhs), axis=1)
-        ls2_pred = F.argmax(self.W_l2(concat_lhs), axis=1)
+        concat_ls_out = F.concat(ls_out, axis=0)
         
-        acc = np.sum(np.logical_and(backends.cuda.to_cpu(ls1_pred.data) == backends.cuda.to_cpu(concat_ls1_out.data),\
-                                    backends.cuda.to_cpu(ls2_pred.data) == backends.cuda.to_cpu(concat_ls2_out.data)))\
-            /float(len(concat_ls1_out))
+        ls_pred = F.argmax(self.W_l(concat_lhs), axis=1)
+        
+        acc = np.sum(backends.cuda.to_cpu(ls_pred.data) == backends.cuda.to_cpu(concat_ls_out.data))/float(len(concat_ls_out))
         return acc
     
