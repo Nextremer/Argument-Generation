@@ -145,11 +145,25 @@ def main(args):
         with open(args.save_dir+'type_seqs.pickle', 'wb') as f:
             pickle.dump(type_seqs, f)
 
+    d = []
+    f = open(args.pretrain_data_path, 'r')
+    for line in f:
+        d.append(nltk.word_tokenize(line.strip()))
+
+    if args.use_lower:
+        d = [[w.lower() for w in s] for s in d]
+
+    if args.save_dir:
+        with open(args.save_dir+'news.2011.en.pickle', 'wb') as f:
+            pickle.dump(d, f)
+
+
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser(description='preprocess corpus(Stab et al., 2017)')
     parser.add_argument('--data_dir', help='raw input data directory')
     parser.add_argument('--save_dir', help='save directory')
+    parser.add_argument('--pretrain_data_path', help='data path for pretraining decoder')
     parser.add_argument('--use_lower', action='store_true')
     args = parser.parse_args()
     
