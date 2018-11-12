@@ -1,4 +1,5 @@
 from model import *
+from train import *
 import numpy as np
 import unittest
 import random
@@ -27,7 +28,15 @@ class AttentionTest(unittest.TestCase):
         self.assertTrue(all(np.isclose(cuda.to_cpu(result[0].data[0][:3]), [-0.52674127, -0.12444207 , 0.7915659 ])))
         self.assertTrue(all(np.isclose(cuda.to_cpu(result[1].data[-1][-3:]), [-0.2755296,   0.47057515,  0.1896592 ])))
 
-        
-        
+
+    def test_bleu(self):
+        hypothesis = ['This', 'is', 'cat']
+        reference = ['This', 'is', 'a', 'cat']
+        references = [reference]
+        list_of_references = [references]
+        list_of_hypotheses = [hypothesis]
+        bleu = bleu_score.corpus_bleu(list_of_references, list_of_hypotheses)
+
+
 if __name__ == '__main__':
     unittest.main()
