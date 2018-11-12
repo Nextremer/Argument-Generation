@@ -5,9 +5,11 @@
 import chainer
 import chainer.links as L
 import chainer.functions as F
-from chainer import optimizers, backends, Variable
+from chainer import optimizers, backends, Variable, serializers
 
 import numpy as np
+
+from pretrain import *
 
 
 EOS = 0
@@ -136,21 +138,26 @@ class Attention(chainer.Chain):
 
         return attn_hs
     
-    
+PRETRAINED_MODEL_PATH = '../pretrained_model.npz'
 
 class Model(chainer.Chain):
 
     def __init__(self, w2id, id2w, w2vec, n_layers, n_units, attn_n_units, eta, dropout):
         n_vocab = len(w2id)
-        n_label = 7
-        
+        n_label = 8
+        l_n_units = 10
+
         init_W = [w2vec[id2w[i]] if id2w[i] in w2vec.keys() else np.random.normal(scale=np.sqrt(2./n_units), size=(n_units, )) \
                   for i, w in id2w.items()]
         init_W = np.asarray(init_W, dtype=np.float32)
-        
+
+        #self.pretrained_model = Pretrainer(w2id, id2w, w2vec, n_layers, n_units, dropout)
+        #serializers.load_npz(PRETRAINED_MODEL_PATH, self.pretrained_model)
+
         super(Model, self).__init__()
         with self.init_scope():
             self.embed = L.EmbedID(n_vocab, n_units, initialW=init_W)
+            self.embed_l = L.EmbedID(n_label, l_n_units)
             self.encoder = L.NStepLSTM(n_layers, n_units, n_units, dropout=dropout)
             self.decoder1 = L.NStepLSTM(n_layers, n_units, n_units, dropout=dropout)
             self.decoder2 = L.NStepLSTM(n_layers, n_units, n_units, dropout=dropout)
@@ -166,8 +173,10 @@ class Model(chainer.Chain):
         
     def __call__(self, xs, ys, ls):
         lhs, ls_out, concat_os, concat_ys_out = self.forward(xs, ys, ls)
-        lhs = [lh[:-1] for lh in lhs]
-        ls_out = [ls[:-1] for ls in ls_out]
+        #lhs = [lh[:-1] for lh in lhs]
+        lhs = [lh[1:] for lh in lhs]
+        #ls_out = [ls[:-1] for ls in ls_out]
+        ls_out = [ls[1:] for ls in ls_out]
         
         concat_lhs = F.concat(lhs, axis=0)
         concat_ls_out = F.concat(ls_out, axis=0)
@@ -185,28 +194,36 @@ class Model(chainer.Chain):
         ls = [self.xp.array(l, dtype=self.xp.int32) for l in ls]
         
         eos = self.xp.array([EOS], dtype=self.xp.int32)
-        eol = self.xp.array([EOL], dtype=self.xp.int32)
-        
+        #eol = self.xp.array([EOL], dtype=self.xp.int32)
+        eol = self.xp.array([0], dtype=self.xp.int32)
+
         ys_in = [F.concat([eos, y], axis=0) for y in ys]
+        #ls_in = [F.concat([eol, l], axis=0) for l in ls]
+
         ys_out = [F.concat([y, eos], axis=0) for y in ys]
-        ls_out = [F.concat([l, eol], axis=0) for l in ls]
+        #ls_out = [F.concat([l, eol], axis=0) for l in ls]
+        ls_out = [F.concat([eol, l], axis=0) for l in ls]
         assert len(ys_out) == len(ls_out)
         
+        concat_ys_out = F.concat(ys_out, axis=0)
+
         # 埋め込み
         exs = self.sequence_embed(self.embed, xs)
         eys = self.sequence_embed(self.embed, ys_in)
-        
-        concat_ys_out = F.concat(ys_out, axis=0)
+        #els = self.sequence_embed(self.embed_l, ls_in)
+        #concat_eys = [F.concat([ey, el], axis=1) for ey, el in zip(eys, els)]
         
         h, c, ehs = self.encoder(None, None, exs)
         _, _, dhs = self.decoder1(h, c, eys)
+        #_, _, dhs = self.pretrained_model.decoder(h, c, eys)
         yhs = self.attention(ehs, dhs)
-        _, _, lhs = self.decoder2(None, None, yhs)
+        #concat_yhs = [F.concat([yh, el], axis=1) for yh, el in zip(yhs, els)]
+        _, _, lhs = self.decoder2(None, None, dhs)
         
         concat_yhs = F.concat(yhs, axis=0)
         
         return lhs, ls_out, concat_yhs, concat_ys_out
-
+        
     def generate(self, xs, max_length):
         batchsize = len(xs)
         with chainer.no_backprop_mode(), chainer.using_config('train', False):
@@ -216,10 +233,9 @@ class Model(chainer.Chain):
                     for w in x[::-1]] for x in xs]
             exs = [F.concat(x, axis=0) for x in exs]
             
-            _, _, ehs = self.encoder(None, None, exs)
+            h, c, ehs = self.encoder(None, None, exs)
             
             ys = self.xp.full(batchsize, EOS, dtype=self.xp.int32)
-            h, c = None, None
             result = []
             for i in range(max_length):
                 eys = self.embed(ys)
@@ -239,10 +255,9 @@ class Model(chainer.Chain):
             inds = np.argwhere(y == EOS)
             if len(inds) > 0:
                 y = y[:inds[0, 0]]
-            s = ''
+            s = []
             for i in y:
-                s += self.id2w.get(i, 'unk')
-                s += ' '
+                s.append(self.id2w.get(i, 'unk'))
             outs.append(s)
                 
         return outs
