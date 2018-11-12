@@ -35,7 +35,9 @@ def calculateBleu(hypothesis, reference):
     references = [reference]
     list_of_references = [references]
     list_of_hypotheses = [hypothesis]
-    bleu = bleu_score.corpus_bleu(list_of_references, list_of_hypotheses, smoothing_function=bleu_score.SmoothingFunction().method1)
+    bleu = bleu_score.corpus_bleu(list_of_references, list_of_hypotheses, \
+                                  smoothing_function=bleu_score.SmoothingFunction().method1)
+
     return bleu
             
 
@@ -47,9 +49,9 @@ def main(args):
             args.n_layers, 
             args.n_units, 
             args.attn_n_units,
-            args.eta, 
-            args.max_epoch, 
-            args.mb_size, 
+            args.eta,
+            args.max_epoch,
+            args.mb_size,
             args.dropout)
             
     # load data(tokenized word) 
@@ -63,7 +65,7 @@ def main(args):
     # train, test size
     train_size = len(train_idxs)
     test_size = len(test_idxs)
-    
+
     # word2vec
     f = open(args.w2vec_path, 'r')
     w2vec = {line.strip().split(' ')[0]: np.array(line.strip().split(' ')[1:], dtype=np.float32) for line in f}
@@ -71,6 +73,13 @@ def main(args):
     # w2id
     w2id = defaultdict(lambda: len(w2id))
     
+    # load pretrain data
+    #f = open(args.data_path, 'rb')
+    #xs = pickle.load(f)
+
+    # get wid sequence of pretrain dataset
+    #xs = [get_wid_seq(x, w2id, is_make=True) for x in xs]
+
     # train, test split
     train_topics = [get_wid_seq(topics[idx], w2id, is_make=True) for idx in train_idxs]
     train_contexts = [get_wid_seq(contexts[idx], w2id, is_make=True) for idx in train_idxs]
@@ -152,18 +161,18 @@ def main(args):
         
         train_mean_bleu = 0
         # generate argument(train)
-        for i in range(0, train_size, args.mb_size):
+        for mb in range(0, train_size, args.mb_size):
             topic = ''
-            for w in topics[train_idxs[i]]:
+            for w in topics[train_idxs[mb]]:
                 topic += w
                 topic += ' '
-            train_idx_mb = train_idxs[i:i+args.mb_size]
-            train_topics_mb = [topics[j] for j in train_idx_mb]
+            train_idx_mb = train_idxs[mb:mb+args.mb_size]
+            train_topics_mb = [topics[idx] for idx in train_idx_mb]
             arguments = model.generate(train_topics_mb, args.max_length)
             
             outs = []
-            for j, argument in enumerate(arguments):
-                bleu = calculateBleu(argument, contexts[train_idxs[i+j]])
+            for i, argument in enumerate(arguments):
+                bleu = calculateBleu(argument, contexts[train_idxs[mb+i]])
                 train_mean_bleu += bleu
                 out = ''
                 for w in argument:
@@ -194,43 +203,49 @@ def main(args):
         train_loss_w_reporter = ScoreReporter(args.mb_size, train_size)
         train_loss_label_reporter = ScoreReporter(args.mb_size, train_size)
         train_loss_reporter = ScoreReporter(args.mb_size, train_size)
-                
-        
+
         test_mean_bleu = 0
         # generate argument(test)
-        for i in range(test_size):
-            topic = ''
-            for w in topics[test_idxs[i]]:
-                topic += w
-                topic += ' '
-            argument = model.generate([topics[test_idxs[i]]], args.max_length)
-            out = ''
-            for w in argument[0]:
-                out += w
-                out += ' '
-            if i % 10 == 0:
-                print('-'*100)
-                print('test')
-                print('topic:')
-                print(topic)
-                print('generated argument:')
-                print(out)
-            if args.save_dir:
-                with open(args.save_dir+'arguments.txt', 'a') as f:
-                    f.write('-'*50+'\n')
-                    f.write('test\n')
-                    f.write('epoch: '+str(epoch+1)+'\n')
-                    f.write('topic: '+topic+'\n')
-                    f.write('argument: '+out+'\n')
-            bleu = calculateBleu(argument[0], contexts[test_idxs[i]])
-            test_mean_bleu += bleu
+        for mb in range(0, test_size, args.mb_size):
+            test_idx_mb = test_idxs[mb:mb+args.mb_size]
+            test_topics_mb = [topics[idx] for idx in test_idx_mb]
+            arguments = model.generate(test_topics_mb, args.max_length)
+
+            outs = []
+            for i, argument in enumerate(arguments):
+                topic = ''
+                for w in topics[test_idxs[mb+i]]:
+                    topic += w
+                    topic += ' '
+                bleu = calculateBleu(argument, contexts[test_idxs[mb+i]])
+                test_mean_bleu += bleu
+                out = ''
+                for w in argument:
+                    out += w
+                    out += ' '
+                if args.save_dir:
+                    with open(args.save_dir+'arguments.txt', 'a') as f:
+                        f.write('-'*50+'\n')
+                        f.write('test\n')
+                        f.write('epoch: '+str(epoch+1)+'\n')
+                        f.write('topic: '+topic+'\n')
+                        f.write('argument: '+out+'\n')
+                outs.append(out)
+
+            print('-'*100)
+            print('test')
+            print('topic:')
+            print(topic)
+            print('generated argument:')
+            print(outs[0])
+
         test_mean_bleu /= float(test_size)
         test_mean_bleus.append(test_mean_bleu)
         print('test mean bleu: '+str(test_mean_bleu))
                     
         if args.save_dir:
             # save figs
-            save_figs(
+            save_figs(\
                 args.save_dir, epoch+1, train_mean_losses, train_mean_losses_w, train_mean_losses_label, \
                 train_mean_bleus, test_mean_bleus)
             
@@ -245,6 +260,7 @@ if __name__ == '__main__':
     parser.add_argument('--idx_path', help='train test idx file')
     parser.add_argument('--save_dir', help='save figures directory')
     parser.add_argument('--w2vec_path', help='w2vec path')
+    parser.add_argument('--data_path', help='pretrain dataset')
     parser.add_argument('--gpu', type=int, default=-1, help='GPU ID (negative value indicates CPU)')
     parser.add_argument('--n_layers', type=int, default=3)
     parser.add_argument('--n_units', type=int, default=200)
