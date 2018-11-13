@@ -58,6 +58,8 @@ def main(args):
     topics = load_data(args.data_dir+'topics.pickle')
     contexts = load_data(args.data_dir+'contexts.pickle')
     type_seqs = load_data(args.data_dir+'type_seqs.pickle')
+    rel_seqs = load_data(args.data_dir+'rel_seqs.pickle')
+    dist_seqs = load_data(args.data_dir+'dist_seqs.pickle')
     
     # train, test idxs
     train_idxs, test_idxs = get_train_test_idxs(args.idx_path)
@@ -84,20 +86,28 @@ def main(args):
     train_topics = [get_wid_seq(topics[idx], w2id, is_make=True) for idx in train_idxs]
     train_contexts = [get_wid_seq(contexts[idx], w2id, is_make=True) for idx in train_idxs]
     train_type_seqs = [np.array(type_seqs[idx], dtype=np.int32) for idx in train_idxs]
+    train_rel_seqs = [np.array(rel_seqs[idx], dtype=np.int32) for idx in train_idxs]
+    train_dist_seqs = [np.array(dist_seqs[idx], dtype=np.int32) for idx in train_idxs]
     
     idxs = sorted(np.arange(0, train_size), key=lambda x: len(train_contexts[x]), reverse=True)
     train_topics = [train_topics[idx] for idx in idxs]
     train_contexts = [train_contexts[idx] for idx in idxs]
     train_type_seqs = [train_type_seqs[idx] for idx in idxs]
+    train_rel_seqs = [train_rel_seqs[idx] for idx in idxs]
+    train_dist_seqs = [train_dist_seqs[idx] for idx in idxs]
     
     test_topics = [topics[idx] for idx in test_idxs]
     test_contexts = [contexts[idx] for idx in test_idxs]
     test_type_seqs = [np.array(type_seqs[idx], dtype=np.int32) for idx in test_idxs]
+    test_rel_seqs = [np.array(rel_seqs[idx], dtype=np.int32) for idx in test_idxs]
+    test_dist_seqs = [np.array(dist_seqs[idx], dtype=np.int32) for idx in test_idxs]
     
     idxs = sorted(np.arange(0, test_size), key=lambda x: len(test_contexts[x]), reverse=True)
     test_topics = [test_topics[idx] for idx in idxs]
     test_contexts = [test_contexts[idx] for idx in idxs]
     test_type_seqs = [test_type_seqs[idx] for idx in idxs]
+    test_rel_seqs = [test_rel_seqs[idx] for idx in idxs]
+    test_dist_seqs = [test_dist_seqs[idx] for idx in idxs]
     
     # id2w
     id2w = {v: k for k, v in w2id.items()}
@@ -143,9 +153,11 @@ def main(args):
             train_topic_mb = train_topics[mb:mb+args.mb_size]
             train_context_mb = train_contexts[mb:mb+args.mb_size]
             train_type_mb = train_type_seqs[mb:mb+args.mb_size]
+            train_rel_mb = train_rel_seqs[mb:mb+args.mb_size]
+            train_dist_mb = train_dist_seqs[mb:mb+args.mb_size]
             
             model.cleargrads()
-            loss1, loss2, loss = model(train_topic_mb, train_context_mb, train_type_mb)
+            loss1, loss2, loss = model(train_topic_mb, train_context_mb, (train_type_mb, train_rel_mb, train_dist_mb))
             train_loss_w_reporter.add(backends.cuda.to_cpu(loss1.data))
             train_loss_label_reporter.add(backends.cuda.to_cpu(args.eta*loss2.data))
             train_loss_reporter.add(backends.cuda.to_cpu(loss.data))
