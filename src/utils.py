@@ -39,6 +39,17 @@ def read_sentence(data_dir):
             contexts.append(nltk.tokenize.sent_tokenize(context))
     return topics, contexts
 
+def read_ann(data_dir):
+    ann_files = glob.glob(data_dir+'*.ann')
+    anns = []
+    for file in ann_files:
+        ann = []
+        with open(file, 'r', encoding='utf-8') as f:
+            for line in f:
+                ann.append(nltk.word_tokenize(line))
+        anns.append(ann)
+    return anns
+
 
 
 class ScoreReporter(object):
