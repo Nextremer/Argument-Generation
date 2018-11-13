@@ -14,7 +14,6 @@ from pretrain import *
 
 EOS = 0
 UNK = 1
-EOL = 7
 
 
 class Scorer(chainer.Chain):
@@ -138,13 +137,15 @@ class Attention(chainer.Chain):
 
         return attn_hs
     
-PRETRAINED_MODEL_PATH = '../pretrained_model.npz'
+PRETRAINED_MODEL_PATH = '../pretrained/pretrained.model'
 
 class Model(chainer.Chain):
 
     def __init__(self, w2id, id2w, w2vec, n_layers, n_units, attn_n_units, eta, dropout):
         n_vocab = len(w2id)
-        n_label = 8
+        n_label1 = 7
+        n_label2 = 5
+        n_label3 = 21
         l_n_units = 10
 
         init_W = [w2vec[id2w[i]] if id2w[i] in w2vec.keys() else np.random.normal(scale=np.sqrt(2./n_units), size=(n_units, )) \
@@ -157,12 +158,14 @@ class Model(chainer.Chain):
         super(Model, self).__init__()
         with self.init_scope():
             self.embed = L.EmbedID(n_vocab, n_units, initialW=init_W)
-            self.embed_l = L.EmbedID(n_label, l_n_units)
+            self.embed_l1 = L.EmbedID(n_label1, l_n_units)
             self.encoder = L.NStepLSTM(n_layers, n_units, n_units, dropout=dropout)
             self.decoder1 = L.NStepLSTM(n_layers, n_units, n_units, dropout=dropout)
             self.decoder2 = L.NStepLSTM(n_layers, n_units, n_units, dropout=dropout)
             self.W_y = L.Linear(n_units, n_vocab)
-            self.W_l = L.Linear(n_units, n_label)
+            self.W_l1 = L.Linear(n_units, n_label1)
+            self.W_l2 = L.Linear(n_units, n_label2)
+            self.W_l3 = L.Linear(n_units, n_label3)
             
             self.attention = Attention(n_units, n_units, attn_n_units)
             
@@ -172,39 +175,50 @@ class Model(chainer.Chain):
         self.eta = eta
         
     def __call__(self, xs, ys, ls):
-        lhs, ls_out, concat_os, concat_ys_out = self.forward(xs, ys, ls)
+        lhs, ls1_out, ls2_out, ls3_out, concat_os, concat_ys_out = self.forward(xs, ys, ls)
         #lhs = [lh[:-1] for lh in lhs]
         lhs = [lh[1:] for lh in lhs]
         #ls_out = [ls[:-1] for ls in ls_out]
-        ls_out = [ls[1:] for ls in ls_out]
+        ls1_out = [ls[1:] for ls in ls1_out]
+        ls2_out = [ls[1:] for ls in ls2_out]
+        ls3_out = [ls[1:] for ls in ls3_out]
         
         concat_lhs = F.concat(lhs, axis=0)
-        concat_ls_out = F.concat(ls_out, axis=0)
+        concat_ls1_out = F.concat(ls1_out, axis=0)
+        concat_ls2_out = F.concat(ls2_out, axis=0)
+        concat_ls3_out = F.concat(ls3_out, axis=0)
         
         batchsize = len(xs)
         loss1 = F.sum(F.softmax_cross_entropy(self.W_y(concat_os), concat_ys_out, reduce='no'))/batchsize
-        loss2 = F.sum(F.softmax_cross_entropy(self.W_l(concat_lhs), concat_ls_out, reduce='no'))/batchsize
-        loss = loss1 + self.eta * loss2
+        loss2 = F.sum(F.softmax_cross_entropy(self.W_l1(concat_lhs), concat_ls1_out, reduce='no'))/batchsize
+        loss3 = F.sum(F.softmax_cross_entropy(self.W_l2(concat_lhs), concat_ls2_out, reduce='no'))/batchsize
+        loss4 = F.sum(F.softmax_cross_entropy(self.W_l3(concat_lhs), concat_ls3_out, reduce='no'))/batchsize
+
+        loss_l = loss2 + loss3 + loss4
+        loss = loss1 + self.eta * loss_l
         
-        return loss1, loss2, loss
+        return loss1, loss_l, loss
 
     def forward(self, xs, ys, ls):
+        ls1, ls2, ls3 = ls
         xs = [self.xp.array(x[::-1], dtype=self.xp.int32) for x in xs]
         ys = [self.xp.array(y, dtype=self.xp.int32) for y in ys]
-        ls = [self.xp.array(l, dtype=self.xp.int32) for l in ls]
+        ls1 = [self.xp.array(l, dtype=self.xp.int32) for l in ls1]
+        ls2 = [self.xp.array(l, dtype=self.xp.int32) for l in ls2]
+        ls3 = [self.xp.array(l, dtype=self.xp.int32) for l in ls3]
         
         eos = self.xp.array([EOS], dtype=self.xp.int32)
-        #eol = self.xp.array([EOL], dtype=self.xp.int32)
         eol = self.xp.array([0], dtype=self.xp.int32)
 
         ys_in = [F.concat([eos, y], axis=0) for y in ys]
         #ls_in = [F.concat([eol, l], axis=0) for l in ls]
 
         ys_out = [F.concat([y, eos], axis=0) for y in ys]
-        #ls_out = [F.concat([l, eol], axis=0) for l in ls]
-        ls_out = [F.concat([eol, l], axis=0) for l in ls]
-        assert len(ys_out) == len(ls_out)
-        
+        ls1_out = [F.concat([eol, l], axis=0) for l in ls1]
+        ls2_out = [F.concat([eol, l], axis=0) for l in ls2]
+        ls3_out = [F.concat([eol, l], axis=0) for l in ls3]
+        assert len(ys_out) == len(ls1_out) == len(ls2_out) == len(ls3_out)
+
         concat_ys_out = F.concat(ys_out, axis=0)
 
         # 埋め込み
@@ -222,7 +236,7 @@ class Model(chainer.Chain):
         
         concat_yhs = F.concat(yhs, axis=0)
         
-        return lhs, ls_out, concat_yhs, concat_ys_out
+        return lhs, ls1_out, ls2_out, ls3_out, concat_yhs, concat_ys_out
         
     def generate(self, xs, max_length):
         batchsize = len(xs)
