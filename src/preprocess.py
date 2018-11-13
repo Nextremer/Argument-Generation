@@ -2,10 +2,12 @@
 import numpy as np
 import json
 import pickle
-from collections import defaultdict
-from utils import *
+from collections import defaultdict, Counter
+from operator import add
 import argparse
+from functools import reduce
 
+from utils import *
 
 
 def type_tagging(seq, match_idx, label, length):
@@ -29,6 +31,39 @@ def type_tagging(seq, match_idx, label, length):
         seq[(match_idx+1):(match_idx+length)] = [2]*(length-1)
     return seq
 
+
+def rel_tagging(seq, match_idx, label, length):
+    """
+    'None': 0
+    'Support': 1
+    'Attack': 2
+    'For': 3
+    'Against': 4
+    """
+    if label == 'supports':
+        seq[match_idx:match_idx+length] = [1]*length
+    elif label == 'attacks':
+        seq[match_idx:match_idx+length] = [2]*length
+    elif label == 'For':
+        seq[match_idx:match_idx+length] = [3]*length
+    elif label == 'Against':
+        seq[match_idx:match_idx+length] = [4]*length
+
+    return seq
+
+
+def dist_tagging(seq, match_idx, label, length):
+    """
+    0: 'None'
+    -11 ~ -1 => 1 ~ 11
+    1 ~ 9 => 12 ~ 20
+    """
+    if -12 < label < 0:
+        seq[match_idx:match_idx+length] = [label+12]*length
+    elif 0 < label < 10:
+        seq[match_idx:match_idx+length] = [label+11]*length
+
+    return seq
 
 
 def get_match_idx1(match_idxs, essay_num, ann):
@@ -99,12 +134,17 @@ def get_match_idx2(match_idxs, essay_num, ann):
 def get_labels(context, anns, essay_num, use_lower):
     """1つのcontextに対して、component typeのラベル系列を得る"""
     type_seq = [0]*len(context)
+    rel_seq = [0]*len(context)
+    dist_seq = [0]*len(context)
+    comp_dict = defaultdict(lambda: len(comp_dict))
     for ann in anns:
         if ann[0].startswith('T'):
+            label = ann[1]
             pattern = ann[4:]
             if use_lower:
                 pattern = [w.lower() for w in pattern]
             pattern_length = len(pattern)
+
             idxs = [idx for idx, w in enumerate(context) if w == pattern[0]]
             match_idxs = list(filter(lambda x: context[x:x+pattern_length] == pattern, idxs))
             assert len(match_idxs) > 0
@@ -114,9 +154,29 @@ def get_labels(context, anns, essay_num, use_lower):
             else:
                 match_idx = get_match_idx2(match_idxs, essay_num, ann)
 
-        type_seq = type_tagging(type_seq, match_idx, ann[1], pattern_length)
+            comp_dict[ann[0]] = (match_idx, pattern_length)
 
-    return type_seq
+            type_seq = type_tagging(type_seq, match_idx, label, pattern_length)
+
+        elif ann[0].startswith('A'):
+            match_idx, pattern_length = comp_dict[ann[2]]
+            label = ann[3]
+            rel_seq = rel_tagging(rel_seq, match_idx, label, pattern_length)
+
+        elif ann[0].startswith('R'):
+            sorted_comp_dict = sorted(dict(comp_dict).items(), key=lambda x: x[1][0])
+            sorted_comp = [i[0] for i in sorted_comp_dict]
+            match_idx, pattern_length = comp_dict[ann[4]]
+            label = ann[1]
+            arg1 = ann[4]
+            arg2 = ann[7]
+            arg1_idx = sorted_comp.index(arg1)
+            arg2_idx = sorted_comp.index(arg2)
+            dist = arg2_idx - arg1_idx
+            rel_seq = rel_tagging(rel_seq, match_idx, label, pattern_length)
+            dist_seq = dist_tagging(dist_seq, match_idx, dist, pattern_length)
+
+    return type_seq, rel_seq, dist_seq
 
 
 def main(args):
@@ -130,10 +190,14 @@ def main(args):
         contexts = [[w.lower() for w in context] for context in contexts]
 
     type_seqs = []
+    rel_seqs = []
+    dist_seqs = []
     essay_num = 0
     for context, ann in zip(contexts, anns):
-        type_seq = get_labels(context, ann, essay_num, args.use_lower)
+        type_seq, rel_seq, dist_seq = get_labels(context, ann, essay_num, args.use_lower)
         type_seqs.append(type_seq)
+        rel_seqs.append(rel_seq)
+        dist_seqs.append(dist_seq)
         essay_num += 1
 
     # save tokenized topics, tokenized contexts, type sequences
@@ -144,6 +208,10 @@ def main(args):
             pickle.dump(contexts, f)
         with open(args.save_dir+'type_seqs.pickle', 'wb') as f:
             pickle.dump(type_seqs, f)
+        with open(args.save_dir+'rel_seqs.pickle', 'wb') as f:
+            pickle.dump(rel_seqs, f)
+        with open(args.save_dir+'dist_seqs.pickle', 'wb') as f:
+            pickle.dump(dist_seqs, f)
 
     """
     d = []
@@ -163,7 +231,6 @@ def main(args):
     if args.use_lower:
         topics_sent = [[sent.lower() for sent in topic_sent] for topic_sent in topics_sent]
         contexts_sent = [[sent.lower() for sent in context_sent] for context_sent in contexts_sent]
-        print(contexts_sent[0])
 
     if args.save_dir:
         with open(args.save_dir+'topics_sent.pickle', 'wb') as f:
