@@ -145,6 +145,7 @@ def main(args):
         with open(args.save_dir+'type_seqs.pickle', 'wb') as f:
             pickle.dump(type_seqs, f)
 
+    """
     d = []
     f = open(args.pretrain_data_path, 'r')
     for line in f:
@@ -156,6 +157,19 @@ def main(args):
     if args.save_dir:
         with open(args.save_dir+'news.2011.en.pickle', 'wb') as f:
             pickle.dump(d, f)
+    """
+
+    topics_sent, contexts_sent = read_sentence(args.data_dir)
+    if args.use_lower:
+        topics_sent = [[sent.lower() for sent in topic_sent] for topic_sent in topics_sent]
+        contexts_sent = [[sent.lower() for sent in context_sent] for context_sent in contexts_sent]
+        print(contexts_sent[0])
+
+    if args.save_dir:
+        with open(args.save_dir+'topics_sent.pickle', 'wb') as f:
+            pickle.dump(topics_sent, f)
+        with open(args.save_dir+'contexts_sent.pickle', 'wb') as f:
+            pickle.dump(contexts_sent, f)
 
 
 
