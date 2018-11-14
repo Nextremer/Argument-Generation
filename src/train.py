@@ -4,11 +4,11 @@
 import pickle
 import argparse
 from collections import defaultdict
-from utils import *
-from model import *
 import time
 from nltk.translate import bleu_score
 
+from utils import *
+from model import *
 
 
 def load_data(path):
@@ -74,7 +74,7 @@ def main(args):
     
     # w2id
     w2id = defaultdict(lambda: len(w2id))
-    
+
     # load pretrain data
     #f = open(args.data_path, 'rb')
     #xs = pickle.load(f)
@@ -88,14 +88,14 @@ def main(args):
     train_type_seqs = [np.array(type_seqs[idx], dtype=np.int32) for idx in train_idxs]
     train_rel_seqs = [np.array(rel_seqs[idx], dtype=np.int32) for idx in train_idxs]
     train_dist_seqs = [np.array(dist_seqs[idx], dtype=np.int32) for idx in train_idxs]
-    
+
     idxs = sorted(np.arange(0, train_size), key=lambda x: len(train_contexts[x]), reverse=True)
     train_topics = [train_topics[idx] for idx in idxs]
     train_contexts = [train_contexts[idx] for idx in idxs]
     train_type_seqs = [train_type_seqs[idx] for idx in idxs]
     train_rel_seqs = [train_rel_seqs[idx] for idx in idxs]
     train_dist_seqs = [train_dist_seqs[idx] for idx in idxs]
-    
+
     test_topics = [topics[idx] for idx in test_idxs]
     test_contexts = [contexts[idx] for idx in test_idxs]
     test_type_seqs = [np.array(type_seqs[idx], dtype=np.int32) for idx in test_idxs]
@@ -261,6 +261,8 @@ def main(args):
                 args.save_dir, epoch+1, train_mean_losses, train_mean_losses_w, train_mean_losses_label, \
                 train_mean_bleus, test_mean_bleus)
             
+            np.savez(args.save_dir+'mean_bleus.npz', x = np.asarray(train_mean_bleus), y = np.asarray(test_mean_bleus))
+
         end_time = time.time()
         print('elapsed time:{}'.format(end_time-start_time))
 
