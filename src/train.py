@@ -132,6 +132,7 @@ def main(args):
     optimizer = optimizers.Adam()
     optimizer.setup(model)
     optimizer.add_hook(chainer.optimizer.GradientClipping(5.0))
+    optimizer.add_hook(chainer.optimizer.WeightDecay(5e-4))
     
     # initialize reporter
     train_loss_w_reporter = ScoreReporter(args.mb_size, train_size)
