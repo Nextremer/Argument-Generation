@@ -9,7 +9,7 @@ from chainer import optimizers, backends, Variable, serializers
 
 import numpy as np
 
-from pretrain import *
+from pretrainer import *
 
 
 EOS = 0
