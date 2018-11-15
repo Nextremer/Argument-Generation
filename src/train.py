@@ -113,16 +113,8 @@ def main(args):
     id2w = {v: k for k, v in w2id.items()}
     
     # define model
-    model = Model(
-                w2id,
-                id2w,
-                w2vec,
-                args.n_layers, 
-                args.n_units, 
-                args.attn_n_units, 
-                args.eta,
-                args.dropout)
-    
+    model = Model(args, w2id, id2w, w2vec)
+
     # Use GPU
     if args.gpu >= 0:
         backends.cuda.get_device(args.gpu).use()
@@ -285,6 +277,7 @@ if __name__ == '__main__':
     parser.add_argument('--mb_size', type=int, default=16)
     parser.add_argument('--dropout', type=float, default=0.5)
     parser.add_argument('--max_length', type=int, default=100)
+    parser.add_argument('--use_pretrained', action='store_true')
     args = parser.parse_args()
     
     main(args)
