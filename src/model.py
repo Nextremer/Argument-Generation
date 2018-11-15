@@ -138,8 +138,8 @@ class Attention(chainer.Chain):
 
         return attn_hs
     
-PRETRAINED_MODEL_PATH = '../pretrained/pretrained.model'
 
+    
 class Model(chainer.Chain):
 
     def __init__(self, args, w2id, id2w, w2vec):
@@ -148,6 +148,7 @@ class Model(chainer.Chain):
         attn_n_units = args.attn_n_units
         eta = args.eta
         dropout = args.dropout
+        PRETRAINED_MODEL_PATH = args.pretrained_model_path
         
         n_vocab = len(w2id)
         n_label1 = 7

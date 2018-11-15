@@ -268,6 +268,7 @@ if __name__ == '__main__':
     parser.add_argument('--save_dir', help='save figures directory')
     parser.add_argument('--w2vec_path', help='w2vec path')
     parser.add_argument('--data_path', help='pretrain dataset')
+    parser.add_argument('--pretrained_model_path', help='pretrained model path')
     parser.add_argument('--gpu', type=int, default=-1, help='GPU ID (negative value indicates CPU)')
     parser.add_argument('--n_layers', type=int, default=3)
     parser.add_argument('--n_units', type=int, default=200)
