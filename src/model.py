@@ -16,6 +16,7 @@ EOS = 0
 UNK = 1
 
 
+
 class Scorer(chainer.Chain):
     #encoder hidden statesとdecoder hidden stateのスコア関数
     def __init__(self, enc_n_units, dec_n_units, attn_n_units):
@@ -141,7 +142,13 @@ PRETRAINED_MODEL_PATH = '../pretrained/pretrained.model'
 
 class Model(chainer.Chain):
 
-    def __init__(self, w2id, id2w, w2vec, n_layers, n_units, attn_n_units, eta, dropout):
+    def __init__(self, args, w2id, id2w, w2vec):
+        n_layers = args.n_layers
+        n_units = args.n_units
+        attn_n_units = args.attn_n_units
+        eta = args.eta
+        dropout = args.dropout
+        
         n_vocab = len(w2id)
         n_label1 = 7
         n_label2 = 5
@@ -151,10 +158,14 @@ class Model(chainer.Chain):
         init_W = [w2vec[id2w[i]] if id2w[i] in w2vec.keys() else np.random.normal(scale=np.sqrt(2./n_units), size=(n_units, )) \
                   for i, w in id2w.items()]
         init_W = np.asarray(init_W, dtype=np.float32)
-
-        #self.pretrained_model = Pretrainer(w2id, id2w, w2vec, n_layers, n_units, dropout)
-        #serializers.load_npz(PRETRAINED_MODEL_PATH, self.pretrained_model)
-
+        
+        if args.use_pretrained:
+            self.pretrained_model = Pretrainer(w2id, id2w, w2vec, n_layers, n_units, dropout)
+            serializers.load_npz(PRETRAINED_MODEL_PATH, self.pretrained_model)
+            if args.gpu >= 0:
+                backends.cuda.get_device(args.gpu).use()
+                self.pretrained_model.to_gpu(args.gpu)
+        
         super(Model, self).__init__()
         with self.init_scope():
             self.embed = L.EmbedID(n_vocab, n_units, initialW=init_W)
