@@ -11,8 +11,7 @@ import collections
 from collections import defaultdict
 import argparse
 import pickle
-from operator import add
-from functools import reduce
+import time
 
 from utils import *
 
@@ -155,6 +154,7 @@ def main(args):
     
     # train loop
     for epoch in range(args.max_epoch):
+        start = time.time()
         print('epoch: {}'.format(epoch+1))
         for mb in range(0, train_size, args.mb_size):
             train_xs = xs[mb:mb+args.mb_size]
@@ -169,10 +169,13 @@ def main(args):
         print('train mean loss: {}'.format(train_loss_reporter.mean()))
             
         train_loss_reporter = ScoreReporter(args.mb_size, train_size)
-        if (epoch+1) % 500 == 0:
+        if (epoch+1) % 10 == 0:
             if args.save_dir:
                 serializers.save_npz(args.save_dir+str(epoch+1)+'pretrained.model', model.decoder)
                 save_figs_(args.save_dir, args.max_epoch, train_mean_losses)
+        
+        end = time.time()
+        print('elapsed time: {}'.format(str(end-start)))
 
 
 
@@ -184,7 +187,7 @@ if __name__ == '__main__':
     parser.add_argument('--save_dir')
     parser.add_argument('--idx_path')
     parser.add_argument('--gpu', type=int, default=-1, help='GPU ID (negative value indicates CPU)')
-    parser.add_argument('--max_epoch', type=int, default=500)
+    parser.add_argument('--max_epoch', type=int, default=100)
     parser.add_argument('--mb_size', type=int, default=64)
     parser.add_argument('--vocab_size', type=int, default=5000)
     args = parser.parse_args()

@@ -144,6 +144,7 @@ class Model(chainer.Chain):
 
     def __init__(self, args, w2id, id2w, w2vec):
         n_layers = args.n_layers
+        n_layers2 = args.n_layers2
         n_units = args.n_units
         attn_n_units = args.attn_n_units
         eta = args.eta
@@ -173,7 +174,7 @@ class Model(chainer.Chain):
             self.embed_l1 = L.EmbedID(n_label1, l_n_units)
             self.encoder = L.NStepLSTM(n_layers, n_units, n_units, dropout=dropout)
             self.decoder1 = L.NStepLSTM(n_layers, n_units, n_units, dropout=dropout)
-            self.decoder2 = L.NStepLSTM(n_layers, n_units, n_units, dropout=dropout)
+            self.decoder2 = L.NStepLSTM(n_layers2, n_units, n_units, dropout=dropout)
             self.W_y = L.Linear(n_units, n_vocab)
             self.W_l1 = L.Linear(n_units, n_label1)
             self.W_l2 = L.Linear(n_units, n_label2)

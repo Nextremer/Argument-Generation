@@ -46,7 +46,8 @@ def main(args):
     if args.save_dir:
         save_args(
             args.save_dir,
-            args.n_layers, 
+            args.n_layers,
+            args.n_layers2,
             args.n_units, 
             args.attn_n_units,
             args.eta,
@@ -264,6 +265,7 @@ if __name__ == '__main__':
     parser.add_argument('--pretrained_model_path', help='pretrained model path')
     parser.add_argument('--gpu', type=int, default=-1, help='GPU ID (negative value indicates CPU)')
     parser.add_argument('--n_layers', type=int, default=3)
+    parser.add_argument('--n_layers2', type=int, default=3)
     parser.add_argument('--n_units', type=int, default=200)
     parser.add_argument('--attn_n_units', type=int, default=150)
     parser.add_argument('--eta', type=float, default=1.0)
