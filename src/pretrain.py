@@ -7,6 +7,7 @@ from chainer import Variable, optimizers, backends, serializers
 
 import numpy as np
 import nltk
+import collections
 from collections import defaultdict
 import argparse
 import pickle
@@ -19,7 +20,19 @@ from utils import *
 EOS = 0
 
 
-class Pretrainer(chainer.Chain):
+class Decoder(chainer.Chain):
+    
+    def __init__(self, n_layers, n_units, dropout):
+        super(Decoder, self).__init__()
+        with self.init_scope():
+            self.decoder = L.NStepLSTM(n_layers, n_units, n_units, dropout=dropout)
+            
+    def __call__(self, h, c, xs):
+        return self.decoder(h, c, xs)
+
+
+
+class PretrainedModel(chainer.Chain):
     
     def __init__(self, w2id, id2w, w2vec, n_layers, n_units, dropout):
         
@@ -29,12 +42,13 @@ class Pretrainer(chainer.Chain):
                   for i, w in id2w.items()]
         init_W = np.asarray(init_W, dtype=np.float32)
         
-        super(Pretrainer, self).__init__()
+        super(PretrainedModel, self).__init__()
         with self.init_scope():
             self.embed = L.EmbedID(n_vocab, n_units, initialW=init_W)
-            self.decoder = L.NStepLSTM(n_layers, n_units, n_units, dropout=dropout)
+            #self.decoder = L.NStepLSTM(n_layers, n_units, n_units, dropout=dropout)
+            self.decoder = Decoder(n_layers, n_units, dropout)
             self.W = L.Linear(n_units, n_vocab)
-            
+
     def __call__(self, xs):
         batchsize = len(xs)
         concat_dhs, concat_xs_out = self.forward(xs)
@@ -66,25 +80,14 @@ class Pretrainer(chainer.Chain):
         exs = F.split_axis(ex, x_section, axis=0)
         return exs
 
+
+
 def load_data(path):
     with open(path, 'rb') as f:
         d = pickle.load(f)
     return d
 
-def get_train_test_idxs(path):
-    train_idxs = []
-    test_idxs = []
-    with open(path, 'r') as f:
-        for line in f:
-            if 'TRAIN' in line.strip():
-                s = line.strip().replace('"', '').split(';')
-                train_idxs.append(int(s[0].replace('essay', ''))-1)
-            elif 'TEST' in line.strip():
-                s = line.strip().replace('"', '').split(';')
-                test_idxs.append(int(s[0].replace('essay', ''))-1)
-    return train_idxs, test_idxs
 
-        
 def save_figs_(save_dir, current_epoch, train_mean_losses):
     plt.switch_backend('agg')
     epoch = np.arange(1, current_epoch+1)
@@ -103,31 +106,36 @@ def main(args):
     f = open(args.w2vec_path, 'r')
     w2vec = {line.strip().split(' ')[0]: np.array(line.strip().split(' ')[1:], dtype=np.float32) for line in f}
     
-    # load pretrain data
-    #f = open(args.data_path, 'rb')
-    #xs = pickle.load(f)
-    
     # load data
-    topics = load_data(args.data_dir+'topics.pickle')
+    with open(args.pretrain_data_path, 'rb') as f:
+        xs = pickle.load(f)
     contexts = load_data(args.data_dir+'contexts.pickle')
+    
+    xs.extend(contexts)
+    
+    xs_flatten = [w for x in xs for w in x]
+    counter = collections.Counter(xs_flatten)
+    count_words = counter.most_common()
+    
+    # vocab_size most frequent words
+    freq_words = [i[0] for i in count_words[:args.vocab_size]]
     
     # initialize w2id
     w2id = defaultdict(lambda: len(w2id))
     
-    # get wid sequence
-    #xs = [get_wid_seq(x, w2id, is_make=True) for x in xs]
+    # make dict from frequent words
+    get_wid_seq(freq_words, w2id, is_make=True)
     
-    # train, test idxs
-    train_idxs, _ = get_train_test_idxs(args.idx_path)
-    train_topics = [get_wid_seq(topics[idx], w2id, is_make=True) for idx in train_idxs]
-    train_contexts = [get_wid_seq(contexts[idx], w2id, is_make=True) for idx in train_idxs]
-        
+    # get wid sequence
+    xs = [get_wid_seq(x, w2id, is_make=False) for x in xs]
+    
+    w2id = dict(w2id)
     id2w = {v: k for k, v in w2id.items()}
     
-    train_size = len(train_contexts)
+    train_size = len(xs)
     
     # define model
-    model = Pretrainer(w2id, id2w, w2vec, 3, 200, 0.8)
+    model = PretrainedModel(w2id, id2w, w2vec, 3, 200, 0.8)
     
     # Use GPU
     if args.gpu >= 0:
@@ -138,17 +146,18 @@ def main(args):
     optimizer = optimizers.Adam()
     optimizer.setup(model)
     optimizer.add_hook(chainer.optimizer.GradientClipping(5.0))
+    optimizer.add_hook(chainer.optimizer.WeightDecay(5e-4))
     
     # initialize reporter
     train_loss_reporter = ScoreReporter(args.mb_size, train_size)
     
     train_mean_losses = []
     
-    # train test loop
+    # train loop
     for epoch in range(args.max_epoch):
         print('epoch: {}'.format(epoch+1))
         for mb in range(0, train_size, args.mb_size):
-            train_xs = train_contexts[mb:mb+args.mb_size]
+            train_xs = xs[mb:mb+args.mb_size]
             
             model.cleargrads()
             loss = model(train_xs)
@@ -160,23 +169,24 @@ def main(args):
         print('train mean loss: {}'.format(train_loss_reporter.mean()))
             
         train_loss_reporter = ScoreReporter(args.mb_size, train_size)
-    
-    if args.save_dir:
-        serializers.save_npz(args.save_dir+'pretrained.model', model)
-        save_figs_(args.save_dir, args.max_epoch, train_mean_losses)
-        
-    
-    
+        if (epoch+1) % 500 == 0:
+            if args.save_dir:
+                serializers.save_npz(args.save_dir+str(epoch+1)+'pretrained.model', model.decoder)
+                save_figs_(args.save_dir, args.max_epoch, train_mean_losses)
+
+
+
 if __name__ == '__main__':
     parser = argparse.ArgumentParser(description='pretrain decoder')
     parser.add_argument('--w2vec_path')
-    parser.add_argument('--data_path')
+    parser.add_argument('--pretrain_data_path')
     parser.add_argument('--data_dir')
     parser.add_argument('--save_dir')
     parser.add_argument('--idx_path')
     parser.add_argument('--gpu', type=int, default=-1, help='GPU ID (negative value indicates CPU)')
     parser.add_argument('--max_epoch', type=int, default=500)
-    parser.add_argument('--mb_size', type=int, default=16)
+    parser.add_argument('--mb_size', type=int, default=64)
+    parser.add_argument('--vocab_size', type=int, default=5000)
     args = parser.parse_args()
     
     main(args)

@@ -75,13 +75,6 @@ def main(args):
     # w2id
     w2id = defaultdict(lambda: len(w2id))
 
-    # load pretrain data
-    #f = open(args.data_path, 'rb')
-    #xs = pickle.load(f)
-
-    # get wid sequence of pretrain dataset
-    #xs = [get_wid_seq(x, w2id, is_make=True) for x in xs]
-
     # train, test split
     train_topics = [get_wid_seq(topics[idx], w2id, is_make=True) for idx in train_idxs]
     train_contexts = [get_wid_seq(contexts[idx], w2id, is_make=True) for idx in train_idxs]
@@ -110,6 +103,7 @@ def main(args):
     test_dist_seqs = [test_dist_seqs[idx] for idx in idxs]
     
     # id2w
+    w2id = dict(w2id)
     id2w = {v: k for k, v in w2id.items()}
     
     # define model
@@ -267,7 +261,6 @@ if __name__ == '__main__':
     parser.add_argument('--idx_path', help='train test idx file')
     parser.add_argument('--save_dir', help='save figures directory')
     parser.add_argument('--w2vec_path', help='w2vec path')
-    parser.add_argument('--data_path', help='pretrain dataset')
     parser.add_argument('--pretrained_model_path', help='pretrained model path')
     parser.add_argument('--gpu', type=int, default=-1, help='GPU ID (negative value indicates CPU)')
     parser.add_argument('--n_layers', type=int, default=3)
@@ -278,7 +271,7 @@ if __name__ == '__main__':
     parser.add_argument('--mb_size', type=int, default=16)
     parser.add_argument('--dropout', type=float, default=0.5)
     parser.add_argument('--max_length', type=int, default=100)
-    parser.add_argument('--use_pretrained', action='store_true')
+    parser.add_argument('--use_pretrained_model', action='store_true')
     args = parser.parse_args()
     
     main(args)

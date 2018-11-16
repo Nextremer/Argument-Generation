@@ -9,7 +9,7 @@ from chainer import optimizers, backends, Variable, serializers
 
 import numpy as np
 
-from pretrainer import *
+from pretrain import *
 
 
 EOS = 0
@@ -148,7 +148,6 @@ class Model(chainer.Chain):
         attn_n_units = args.attn_n_units
         eta = args.eta
         dropout = args.dropout
-        PRETRAINED_MODEL_PATH = args.pretrained_model_path
         
         n_vocab = len(w2id)
         n_label1 = 7
@@ -160,12 +159,13 @@ class Model(chainer.Chain):
                   for i, w in id2w.items()]
         init_W = np.asarray(init_W, dtype=np.float32)
         
-        if args.use_pretrained:
-            self.pretrained_model = Pretrainer(w2id, id2w, w2vec, n_layers, n_units, dropout)
-            serializers.load_npz(PRETRAINED_MODEL_PATH, self.pretrained_model)
+        if args.use_pretrained_model:
+            PRETRAINED_MODEL_PATH = args.pretrained_model_path
+            self.pretrained_decoder = Decoder(n_layers, n_units, dropout)
+            serializers.load_npz(PRETRAINED_MODEL_PATH, self.pretrained_decoder)
             if args.gpu >= 0:
                 backends.cuda.get_device(args.gpu).use()
-                self.pretrained_model.to_gpu(args.gpu)
+                self.pretrained_decoder.to_gpu(args.gpu)
         
         super(Model, self).__init__()
         with self.init_scope():
@@ -185,6 +185,7 @@ class Model(chainer.Chain):
         self.id2w = id2w
         self.w2vec = w2vec
         self.eta = eta
+        self.use_pretrained_model = args.use_pretrained_model
         
     def __call__(self, xs, ys, ls):
         lhs, ls1_out, ls2_out, ls3_out, concat_os, concat_ys_out = self.forward(xs, ys, ls)
@@ -240,8 +241,10 @@ class Model(chainer.Chain):
         #concat_eys = [F.concat([ey, el], axis=1) for ey, el in zip(eys, els)]
         
         h, c, ehs = self.encoder(None, None, exs)
-        _, _, dhs = self.decoder1(h, c, eys)
-        #_, _, dhs = self.pretrained_model.decoder(h, c, eys)
+        if self.use_pretrained_model:
+            _, _, dhs = self.pretrained_decoder(h, c, eys)
+        else:
+            _, _, dhs = self.decoder1(h, c, eys)
         yhs = self.attention(ehs, dhs)
         #concat_yhs = [F.concat([yh, el], axis=1) for yh, el in zip(yhs, els)]
         _, _, lhs = self.decoder2(None, None, dhs)
@@ -266,7 +269,10 @@ class Model(chainer.Chain):
             for i in range(max_length):
                 eys = self.embed(ys)
                 eys = F.split_axis(eys, batchsize, axis=0)
-                h, c, dhs = self.decoder1(h, c, eys)
+                if self.use_pretrained_model:
+                    h, c, dhs = self.pretrained_decoder(h, c, eys)
+                else:
+                    h, c, dhs = self.decoder1(h, c, eys)
                 yhs = self.attention(ehs, dhs)
                 concat_yhs = F.concat(yhs, axis=0)
                 wy = self.W_y(concat_yhs)
