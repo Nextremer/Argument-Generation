@@ -97,8 +97,7 @@ def save_figs_(save_dir, current_epoch, train_mean_losses):
     plt.plot(epoch, train_mean_losses, label='loss(train)')
     plt.legend()
     plt.savefig(save_dir+'mean_losses.{}.png'.format(current_epoch))
-    
-    
+
 
 def main(args):
     # w2vec
@@ -172,8 +171,8 @@ def main(args):
         if (epoch+1) % 10 == 0:
             if args.save_dir:
                 serializers.save_npz(args.save_dir+str(epoch+1)+'pretrained.model', model.decoder)
-                save_figs_(args.save_dir, args.max_epoch, train_mean_losses)
-        
+                save_figs_(args.save_dir, epoch+1, train_mean_losses)
+
         end = time.time()
         print('elapsed time: {}'.format(str(end-start)))
 
