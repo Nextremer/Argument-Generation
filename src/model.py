@@ -279,7 +279,7 @@ class Model(chainer.Chain):
             _, _, lhs = self.decoder2(None, None, dhs)
             return lhs, ls1_out, ls2_out, ls3_out, concat_yhs, concat_ys_out
         else:
-            return yhs, ls1_out, ls2_out, ls3_out, concat_yhs, concat_ys_out
+            return dhs, ls1_out, ls2_out, ls3_out, concat_yhs, concat_ys_out
         
         
     def generate(self, xs, max_length):
@@ -299,6 +299,7 @@ class Model(chainer.Chain):
                 ls2 = self.xp.full(batchsize, EOL, dtype=self.xp.int32)
                 ls3 = self.xp.full(batchsize, EOL, dtype=self.xp.int32)
             
+            h_l, c_l = None, None
             result = []
             for i in range(max_length):
                 eys = self.embed(ys)
@@ -320,6 +321,15 @@ class Model(chainer.Chain):
                 concat_yhs = F.concat(yhs, axis=0)
                 wy = self.W_y(concat_yhs)
                 ys = self.xp.argmax(wy.data, axis=1).astype(self.xp.int32)
+                if self.use_rnn3:
+                    h_l, c_l, lhs = self.decoder2(h_l, c_l, dhs)
+                    concat_lhs = F.concat(lhs, axis=0)
+                else:
+                    concat_lhs = F.concat(dhs, axis=0)
+                ls1 = self.xp.argmax(self.W_l1(concat_lhs).data, axis=1).astype(self.xp.int32)
+                ls2 = self.xp.argmax(self.W_l2(concat_lhs).data, axis=1).astype(self.xp.int32)
+                ls3 = self.xp.argmax(self.W_l3(concat_lhs).data, axis=1).astype(self.xp.int32)
+                    
                 result.append(ys)
                 
         result = backends.cuda.to_cpu(self.xp.concatenate([self.xp.expand_dims(x, 0) for x in result]).T)
