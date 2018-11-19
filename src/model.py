@@ -195,6 +195,7 @@ class Model(chainer.Chain):
         self.eta = eta
         self.use_pretrained_model = args.use_pretrained_model
         self.use_label_in = args.use_label_in
+        self.use_rnn3 = args.use_rnn3
         
     def __call__(self, xs, ys, ls):
         lhs, ls1_out, ls2_out, ls3_out, concat_os, concat_ys_out = self.forward(xs, ys, ls)
@@ -270,12 +271,16 @@ class Model(chainer.Chain):
             _, _, dhs = self.pretrained_decoder(h, c, eys)
         else:
             _, _, dhs = self.decoder1(h, c, eys)
-        yhs = self.attention(ehs, dhs)
-        _, _, lhs = self.decoder2(None, None, dhs)
         
+        yhs = self.attention(ehs, dhs)
         concat_yhs = F.concat(yhs, axis=0)
         
-        return lhs, ls1_out, ls2_out, ls3_out, concat_yhs, concat_ys_out
+        if self.use_rnn3:
+            _, _, lhs = self.decoder2(None, None, dhs)
+            return lhs, ls1_out, ls2_out, ls3_out, concat_yhs, concat_ys_out
+        else:
+            return yhs, ls1_out, ls2_out, ls3_out, concat_yhs, concat_ys_out
+        
         
     def generate(self, xs, max_length):
         batchsize = len(xs)

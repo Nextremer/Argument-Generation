@@ -118,8 +118,8 @@ def main(args):
     # optimizer
     optimizer = optimizers.Adam()
     optimizer.setup(model)
-    optimizer.add_hook(chainer.optimizer.GradientClipping(5.0))
-    optimizer.add_hook(chainer.optimizer.WeightDecay(5e-4))
+    optimizer.add_hook(chainer.optimizer.GradientClipping(args.threshold))
+    optimizer.add_hook(chainer.optimizer.WeightDecay(args.learning_rate))
     
     # initialize reporter
     train_loss_w_reporter = ScoreReporter(args.mb_size, train_size)
@@ -273,8 +273,11 @@ if __name__ == '__main__':
     parser.add_argument('--mb_size', type=int, default=16)
     parser.add_argument('--dropout', type=float, default=0.5)
     parser.add_argument('--max_length', type=int, default=100)
+    parser.add_argument('--threshold', type=float, default=5.0)
+    parser.add_argument('--learning_rate', type=float, default=5e-4)
     parser.add_argument('--use_pretrained_model', action='store_true')
     parser.add_argument('--use_label_in', action='store_true')
+    parser.add_argument('--use_rnn3', action='store_true')
     args = parser.parse_args()
     
     main(args)
