@@ -110,8 +110,7 @@ def main(args):
             xs = pickle.load(f)
     contexts = load_data(args.data_dir+'contexts.pickle')
     
-    #xs.extend(contexts)
-    xs = contexts
+    xs.extend(contexts)
     
     xs_flatten = [w for x in xs for w in x]
     counter = collections.Counter(xs_flatten)
