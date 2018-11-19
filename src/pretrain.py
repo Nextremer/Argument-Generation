@@ -16,8 +16,6 @@ import time
 from utils import *
 
 
-EOS = 0
-
 
 class Decoder(chainer.Chain):
     
@@ -57,15 +55,13 @@ class PretrainedModel(chainer.Chain):
             
     def forward(self, xs):
         xs = [self.xp.array(x, dtype=self.xp.int32) for x in xs]
-        eos = self.xp.array([EOS], dtype=self.xp.int32)
         
-        xs_in = [F.concat([eos, x], axis=0) for x in xs]
-        xs_out = [F.concat([x, eos], axis=0) for x in xs]
-        assert len(xs_in) == len(xs_out)
-        
+        xs_in = [x[:-1] for x in xs]
+        xs_out = [x[1:] for x in xs]
         concat_xs_out = F.concat(xs_out, axis=0)
         
         exs = self.sequence_embed(self.embed, xs_in)
+        
         _, _, dhs = self.decoder(None, None, exs)
         
         concat_dhs = F.concat(dhs, axis=0)
@@ -98,6 +94,10 @@ def save_figs_(save_dir, current_epoch, train_mean_losses):
     plt.legend()
     plt.savefig(save_dir+'mean_losses.{}.png'.format(current_epoch))
 
+    
+def _filter(xs, min_len):
+    xs = [x for x in xs if len(x) >= min_len]
+    return xs
 
 def main(args):
     # w2vec
@@ -105,11 +105,13 @@ def main(args):
     w2vec = {line.strip().split(' ')[0]: np.array(line.strip().split(' ')[1:], dtype=np.float32) for line in f}
     
     # load data
-    with open(args.pretrain_data_path, 'rb') as f:
-        xs = pickle.load(f)
+    if args.pretrain_data_path:
+        with open(args.pretrain_data_path, 'rb') as f:
+            xs = pickle.load(f)
     contexts = load_data(args.data_dir+'contexts.pickle')
     
-    xs.extend(contexts)
+    #xs.extend(contexts)
+    xs = contexts
     
     xs_flatten = [w for x in xs for w in x]
     counter = collections.Counter(xs_flatten)
@@ -126,6 +128,8 @@ def main(args):
     
     # get wid sequence
     xs = [get_wid_seq(x, w2id, is_make=False) for x in xs]
+    
+    xs = _filter(xs, args.min_len)
     
     w2id = dict(w2id)
     id2w = {v: k for k, v in w2id.items()}
@@ -171,6 +175,8 @@ def main(args):
         if (epoch+1) % 10 == 0:
             if args.save_dir:
                 serializers.save_npz(args.save_dir+str(epoch+1)+'pretrained.model', model.decoder)
+                serializers.save_npz(args.save_dir+str(epoch+1)+'mymodel.model', model)
+                serializers.save_npz(args.save_dir+str(epoch+1)+'optimizer.model', optimizer)
                 save_figs_(args.save_dir, epoch+1, train_mean_losses)
 
         end = time.time()
@@ -189,6 +195,7 @@ if __name__ == '__main__':
     parser.add_argument('--max_epoch', type=int, default=100)
     parser.add_argument('--mb_size', type=int, default=64)
     parser.add_argument('--vocab_size', type=int, default=5000)
+    parser.add_argument('--min_len', type=int, default=3)
     args = parser.parse_args()
     
     main(args)
