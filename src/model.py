@@ -14,6 +14,7 @@ from pretrain import *
 
 EOS = 0
 UNK = 1
+EOL = 0
 
 
 
@@ -173,8 +174,13 @@ class Model(chainer.Chain):
         with self.init_scope():
             self.embed = L.EmbedID(n_vocab, n_units, initialW=init_W)
             self.embed_l1 = L.EmbedID(n_label1, l_n_units)
+            self.embed_l2 = L.EmbedID(n_label2, l_n_units)
+            self.embed_l3 = L.EmbedID(n_label3, l_n_units)
             self.encoder = L.NStepLSTM(n_layers, n_units, n_units, dropout=dropout)
-            self.decoder1 = L.NStepLSTM(n_layers, n_units, n_units, dropout=dropout)
+            if args.use_label_in:
+                self.decoder1 = L.NStepLSTM(n_layers, n_units+3*l_n_units, n_units, dropout=dropout)
+            else:
+                self.decoder1 = L.NStepLSTM(n_layers, n_units, n_units, dropout=dropout)
             self.decoder2 = L.NStepLSTM(n_layers2, n_units, n_units, dropout=dropout)
             self.W_y = L.Linear(n_units, n_vocab)
             self.W_l1 = L.Linear(n_units, n_label1)
@@ -188,15 +194,20 @@ class Model(chainer.Chain):
         self.w2vec = w2vec
         self.eta = eta
         self.use_pretrained_model = args.use_pretrained_model
+        self.use_label_in = args.use_label_in
         
     def __call__(self, xs, ys, ls):
         lhs, ls1_out, ls2_out, ls3_out, concat_os, concat_ys_out = self.forward(xs, ys, ls)
-        #lhs = [lh[:-1] for lh in lhs]
-        lhs = [lh[1:] for lh in lhs]
-        #ls_out = [ls[:-1] for ls in ls_out]
-        ls1_out = [ls[1:] for ls in ls1_out]
-        ls2_out = [ls[1:] for ls in ls2_out]
-        ls3_out = [ls[1:] for ls in ls3_out]
+        if self.use_label_in:
+            lhs = [lh[:-1] for lh in lhs]
+            ls1_out = [ls[:-1] for ls in ls1_out]
+            ls2_out = [ls[:-1] for ls in ls2_out]
+            ls3_out = [ls[:-1] for ls in ls3_out]
+        else:
+            lhs = [lh[1:] for lh in lhs]
+            ls1_out = [ls[1:] for ls in ls1_out]
+            ls2_out = [ls[1:] for ls in ls2_out]
+            ls3_out = [ls[1:] for ls in ls3_out]
         
         concat_lhs = F.concat(lhs, axis=0)
         concat_ls1_out = F.concat(ls1_out, axis=0)
@@ -223,32 +234,43 @@ class Model(chainer.Chain):
         ls3 = [self.xp.array(l, dtype=self.xp.int32) for l in ls3]
         
         eos = self.xp.array([EOS], dtype=self.xp.int32)
-        eol = self.xp.array([0], dtype=self.xp.int32)
+        eol = self.xp.array([EOL], dtype=self.xp.int32)
 
         ys_in = [F.concat([eos, y], axis=0) for y in ys]
-        #ls_in = [F.concat([eol, l], axis=0) for l in ls]
-
         ys_out = [F.concat([y, eos], axis=0) for y in ys]
-        ls1_out = [F.concat([eol, l], axis=0) for l in ls1]
-        ls2_out = [F.concat([eol, l], axis=0) for l in ls2]
-        ls3_out = [F.concat([eol, l], axis=0) for l in ls3]
-        assert len(ys_out) == len(ls1_out) == len(ls2_out) == len(ls3_out)
-
         concat_ys_out = F.concat(ys_out, axis=0)
 
         # 埋め込み
         exs = self.sequence_embed(self.embed, xs)
         eys = self.sequence_embed(self.embed, ys_in)
-        #els = self.sequence_embed(self.embed_l, ls_in)
-        #concat_eys = [F.concat([ey, el], axis=1) for ey, el in zip(eys, els)]
         
+        if self.use_label_in:
+            ls1_in = [F.concat([eol, l], axis=0) for l in ls1]
+            ls2_in = [F.concat([eol, l], axis=0) for l in ls2]
+            ls3_in = [F.concat([eol, l], axis=0) for l in ls3]
+
+            ls1_out = [F.concat([l, eol], axis=0) for l in ls1]
+            ls2_out = [F.concat([l, eol], axis=0) for l in ls2]
+            ls3_out = [F.concat([l, eol], axis=0) for l in ls3]
+
+            els1 = self.sequence_embed(self.embed_l1, ls1_in)
+            els2 = self.sequence_embed(self.embed_l2, ls2_in)
+            els3 = self.sequence_embed(self.embed_l3, ls3_in)
+            eys = [F.concat([ey, el1, el2, el3], axis=1) for ey, el1, el2, el3 in zip(eys, els1, els2, els3)]
+
+        else:
+            ls1_out = [F.concat([eol, l], axis=0) for l in ls1]
+            ls2_out = [F.concat([eol, l], axis=0) for l in ls2]
+            ls3_out = [F.concat([eol, l], axis=0) for l in ls3]
+        
+        assert len(ys_out) == len(ls1_out) == len(ls2_out) == len(ls3_out)
+
         h, c, ehs = self.encoder(None, None, exs)
         if self.use_pretrained_model:
             _, _, dhs = self.pretrained_decoder(h, c, eys)
         else:
             _, _, dhs = self.decoder1(h, c, eys)
         yhs = self.attention(ehs, dhs)
-        #concat_yhs = [F.concat([yh, el], axis=1) for yh, el in zip(yhs, els)]
         _, _, lhs = self.decoder2(None, None, dhs)
         
         concat_yhs = F.concat(yhs, axis=0)
@@ -267,10 +289,24 @@ class Model(chainer.Chain):
             h, c, ehs = self.encoder(None, None, exs)
             
             ys = self.xp.full(batchsize, EOS, dtype=self.xp.int32)
+            if self.use_label_in:
+                ls1 = self.xp.full(batchsize, EOL, dtype=self.xp.int32)
+                ls2 = self.xp.full(batchsize, EOL, dtype=self.xp.int32)
+                ls3 = self.xp.full(batchsize, EOL, dtype=self.xp.int32)
+            
             result = []
             for i in range(max_length):
                 eys = self.embed(ys)
-                eys = F.split_axis(eys, batchsize, axis=0)
+                if self.use_label_in:
+                    els1 = self.embed_l1(ls1)
+                    els2 = self.embed_l2(ls2)
+                    els3 = self.embed_l3(ls3)
+
+                    eys = [F.concat([ey, el1, el2, el3], axis=0) for ey, el1, el2, el3 in zip(eys, els1, els2, els3)]
+                    eys = [F.expand_dims(ey, axis=0) for ey in eys]
+                else:
+                    eys = F.split_axis(eys, batchsize, axis=0)
+                    
                 if self.use_pretrained_model:
                     h, c, dhs = self.pretrained_decoder(h, c, eys)
                 else:

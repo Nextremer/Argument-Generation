@@ -274,6 +274,7 @@ if __name__ == '__main__':
     parser.add_argument('--dropout', type=float, default=0.5)
     parser.add_argument('--max_length', type=int, default=100)
     parser.add_argument('--use_pretrained_model', action='store_true')
+    parser.add_argument('--use_label_in', action='store_true')
     args = parser.parse_args()
     
     main(args)
