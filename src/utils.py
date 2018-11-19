@@ -91,7 +91,8 @@ def save_figs(save_dir, current_epoch, train_mean_losses, train_mean_losses1, tr
 
 
 def save_args(save_dir, *args):
-    keys = ["n_layers", "n_layers2", "n_units", "attn_n_units", "eta", "max_epoch", "mb_size", "dropout"]
+    keys = ["n_layers", "n_layers2", "n_units", "attn_n_units", "eta", "max_epoch", \
+            "mb_size", "dropout", "max_length", "use_pretrained_model", "use_label_in"]
     assert len(args) == len(keys)
     args_dict = {k: a for k, a in zip(keys, args)}
     

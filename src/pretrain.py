@@ -35,7 +35,8 @@ class PretrainedModel(chainer.Chain):
         
         n_vocab = len(w2id)
         
-        init_W = [w2vec[id2w[i]] if id2w[i] in w2vec.keys() else np.random.normal(scale=np.sqrt(2./n_units), size=(n_units, )) \
+        init_W = [w2vec[id2w[i]] if id2w[i] in w2vec.keys() \
+                  else np.random.normal(scale=np.sqrt(2./n_units), size=(n_units, )) \
                   for i, w in id2w.items()]
         init_W = np.asarray(init_W, dtype=np.float32)
         
