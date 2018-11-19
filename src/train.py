@@ -53,7 +53,13 @@ def main(args):
             args.eta,
             args.max_epoch,
             args.mb_size,
-            args.dropout)
+            args.dropout,
+            args.max_length,
+            args.threshold,
+            args.learning_rate,
+            args.use_pretrained_model,
+            args.use_label_in,
+            args.use_rnn3)
             
     # load data(tokenized word) 
     topics = load_data(args.data_dir+'topics.pickle')
