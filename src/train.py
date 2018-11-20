@@ -255,7 +255,9 @@ def main(args):
                 args.save_dir, epoch+1, train_mean_losses, train_mean_losses_w, train_mean_losses_label, \
                 train_mean_bleus, test_mean_bleus)
             
-            np.savez(args.save_dir+'mean_bleus.npz', x = np.asarray(train_mean_bleus), y = np.asarray(test_mean_bleus))
+            np.savez(args.save_dir+'mean_bleus.npz', x=np.asarray(train_mean_bleus), y=np.asarray(test_mean_bleus))
+            np.savez(args.save_dir+'mean_losses.npz', x=np.asarray(train_mean_losses), y=np.asarray(train_mean_losses_w), \
+                     z=np.asarray(train_mean_losses_label))
 
         end_time = time.time()
         print('elapsed time:{}'.format(end_time-start_time))
