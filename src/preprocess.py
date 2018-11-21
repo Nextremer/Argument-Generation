@@ -3,9 +3,8 @@ import numpy as np
 import json
 import pickle
 from collections import defaultdict, Counter
-from operator import add
 import argparse
-from functools import reduce
+import wikipedia
 
 from utils import *
 
@@ -184,7 +183,7 @@ def main(args):
     topics, contexts = read_txt(args.data_dir)
     anns = read_ann(args.data_dir)
     assert len(topics) == len(contexts) == len(anns)
-
+    
     if args.use_lower:
         topics = [[w.lower() for w in topic] for topic in topics]
         contexts = [[w.lower() for w in context] for context in contexts]
@@ -237,6 +236,37 @@ def main(args):
             pickle.dump(topics_sent, f)
         with open(args.save_dir+'contexts_sent.pickle', 'wb') as f:
             pickle.dump(contexts_sent, f)
+
+
+    topics, contexts_para = read_paragraph(args.data_dir)
+
+    if args.use_lower:
+        topics = [[w.lower() for w in topic] for topic in topics]
+        contexts_para = [[[w.lower() for w in para] for para in context_para] for context_para in contexts_para]
+
+    contexts_len = [np.cumsum([len(paragraph) for paragraph in context])[:-1] for context in contexts_para]
+
+    # ラベル列(tyoe, rel, dist)をパラグラフごとに分割
+    type_seqs = [np.split(type_seq, context_len) for type_seq, context_len in zip(type_seqs, contexts_len)]
+    rel_seqs = [np.split(rel_seq, context_len) for rel_seq, context_len in zip(rel_seqs, contexts_len)]
+    dist_seqs = [np.split(dist_seq, context_len) for dist_seq, context_len in zip(dist_seqs, contexts_len)]
+
+    mc_idxs = [list(filter(lambda x: 5 in type_seq[x], range(len(type_seq))))[0] for type_seq in type_seqs]
+
+    contexts_compressed = [np.concatenate(context_para[:mc_idx+1]) for mc_idx, context_para in zip(mc_idxs, contexts_para)]
+    type_seqs_compressed = [np.concatenate(type_seq[:mc_idx+1]) for mc_idx, type_seq in zip(mc_idxs, type_seqs)]
+    rel_seqs_compressed = [np.concatenate(rel_seq[:mc_idx+1]) for mc_idx, rel_seq in zip(mc_idxs, rel_seqs)]
+    dist_seqs_compressed = [np.concatenate(dist_seq[:mc_idx+1]) for mc_idx, dist_seq in zip(mc_idxs, dist_seqs)]
+
+    if args.save_dir:
+        with open(args.save_dir+'contexts_compressed.pickle', 'wb') as f:
+            pickle.dump(contexts_compressed, f)
+        with open(args.save_dir+'type_seqs_compressed.pickle', 'wb') as f:
+            pickle.dump(type_seqs_compressed, f)
+        with open(args.save_dir+'rel_seqs_compressed.pickle', 'wb') as f:
+            pickle.dump(rel_seqs_compressed, f)
+        with open(args.save_dir+'dist_seqs_compressed.pickle', 'wb') as f:
+            pickle.dump(dist_seqs_compressed, f)
 
 
 
