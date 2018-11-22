@@ -228,6 +228,7 @@ class Model(chainer.Chain):
         return loss1, loss_l, loss
 
     def forward(self, xs, ys, ls):
+        batchsize = len(xs)
         ls1, ls2, ls3 = ls
         xs = [self.xp.array(x[::-1], dtype=self.xp.int32) for x in xs]
         ys = [self.xp.array(y, dtype=self.xp.int32) for y in ys]
@@ -269,7 +270,11 @@ class Model(chainer.Chain):
 
         h, c, ehs = self.encoder(None, None, exs)
         if self.use_pretrained_model:
+            eys_len = [len(ey) for ey in eys]
+            eys_section = np.cumsum(eys_len[:-1])
+            eys = F.concat(eys, axis=0)
             eys = self.W_in(eys)
+            eys = F.split_axis(eys, eys_section, axis=0)
             _, _, dhs = self.pretrained_decoder(h, c, eys)
         else:
             _, _, dhs = self.decoder1(h, c, eys)
