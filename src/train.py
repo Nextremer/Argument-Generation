@@ -162,7 +162,7 @@ def main(args):
         train_mean_losses_label.append(train_loss_label_reporter.mean())
         train_mean_losses.append(train_loss_reporter.mean())
         print('train mean loss(word): {}'.format(train_loss_w_reporter.mean()))
-        print('train mean loss(eta*loss2): {}'.format(train_loss_label_reporter.mean()))
+        print('train mean loss(eta*loss_label): {}'.format(train_loss_label_reporter.mean()))
         print('train mean loss: {}'.format(train_loss_reporter.mean()))
         
         train_mean_bleu = 0

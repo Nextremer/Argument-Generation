@@ -162,14 +162,6 @@ class Model(chainer.Chain):
                   for i, w in id2w.items()]
         init_W = np.asarray(init_W, dtype=np.float32)
         
-        if args.use_pretrained_model:
-            PRETRAINED_MODEL_PATH = args.pretrained_model_path
-            self.pretrained_decoder = Decoder(n_layers, n_units, dropout)
-            serializers.load_npz(PRETRAINED_MODEL_PATH, self.pretrained_decoder)
-            if args.gpu >= 0:
-                backends.cuda.get_device(args.gpu).use()
-                self.pretrained_decoder.to_gpu(args.gpu)
-        
         super(Model, self).__init__()
         with self.init_scope():
             self.embed = L.EmbedID(n_vocab, n_units, initialW=init_W)
@@ -189,6 +181,14 @@ class Model(chainer.Chain):
             self.W_l3 = L.Linear(n_units, n_label3)
             
             self.attention = Attention(n_units, n_units, attn_n_units)
+        
+            if args.use_pretrained_model:
+                PRETRAINED_MODEL_PATH = args.pretrained_model_path
+                self.pretrained_decoder = Decoder(n_layers, n_units, dropout)
+                serializers.load_npz(PRETRAINED_MODEL_PATH, self.pretrained_decoder)
+                if args.gpu >= 0:
+                    backends.cuda.get_device(args.gpu).use()
+                    self.pretrained_decoder.to_gpu(args.gpu)
             
         self.w2id = w2id
         self.id2w = id2w
@@ -260,6 +260,12 @@ class Model(chainer.Chain):
             els2 = self.sequence_embed(self.embed_l2, ls2_in)
             els3 = self.sequence_embed(self.embed_l3, ls3_in)
             eys = [F.concat([ey, el1, el2, el3], axis=1) for ey, el1, el2, el3 in zip(eys, els1, els2, els3)]
+            
+            eys_len = [len(ey) for ey in eys]
+            eys_section = np.cumsum(eys_len[:-1])
+            eys = F.concat(eys, axis=0)
+            eys = self.W_in(eys)
+            eys = F.split_axis(eys, eys_section, axis=0)
 
         else:
             ls1_out = [F.concat([eol, l], axis=0) for l in ls1]
@@ -270,11 +276,6 @@ class Model(chainer.Chain):
 
         h, c, ehs = self.encoder(None, None, exs)
         if self.use_pretrained_model:
-            eys_len = [len(ey) for ey in eys]
-            eys_section = np.cumsum(eys_len[:-1])
-            eys = F.concat(eys, axis=0)
-            eys = self.W_in(eys)
-            eys = F.split_axis(eys, eys_section, axis=0)
             _, _, dhs = self.pretrained_decoder(h, c, eys)
         else:
             _, _, dhs = self.decoder1(h, c, eys)
