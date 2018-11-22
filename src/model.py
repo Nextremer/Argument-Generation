@@ -318,11 +318,9 @@ class Model(chainer.Chain):
 
                     eys = [F.concat([ey, el1, el2, el3], axis=0) for ey, el1, el2, el3 in zip(eys, els1, els2, els3)]
                     eys = [F.expand_dims(ey, axis=0) for ey in eys]
-                    eys_len = [len(ey) for ey in eys]
-                    eys_section = np.cumsum(eys_len[:-1])
                     eys = F.concat(eys, axis=0)
                     eys = self.W_in(eys)
-                    eys = F.split_axis(eys, eys_section, axis=0)
+                    eys = F.split_axis(eys, batchsize, axis=0)
                     
                 else:
                     eys = F.split_axis(eys, batchsize, axis=0)
