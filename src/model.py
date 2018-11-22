@@ -182,6 +182,7 @@ class Model(chainer.Chain):
             else:
                 self.decoder1 = L.NStepLSTM(n_layers, n_units, n_units, dropout=dropout)
             self.decoder2 = L.NStepLSTM(n_layers2, n_units, n_units, dropout=dropout)
+            self.W_in = L.Linear(n_units+3*l_n_units, n_units)
             self.W_y = L.Linear(n_units, n_vocab)
             self.W_l1 = L.Linear(n_units, n_label1)
             self.W_l2 = L.Linear(n_units, n_label2)
@@ -268,6 +269,7 @@ class Model(chainer.Chain):
 
         h, c, ehs = self.encoder(None, None, exs)
         if self.use_pretrained_model:
+            eys = self.W_in(eys)
             _, _, dhs = self.pretrained_decoder(h, c, eys)
         else:
             _, _, dhs = self.decoder1(h, c, eys)
@@ -329,7 +331,7 @@ class Model(chainer.Chain):
                 ls1 = self.xp.argmax(self.W_l1(concat_lhs).data, axis=1).astype(self.xp.int32)
                 ls2 = self.xp.argmax(self.W_l2(concat_lhs).data, axis=1).astype(self.xp.int32)
                 ls3 = self.xp.argmax(self.W_l3(concat_lhs).data, axis=1).astype(self.xp.int32)
-                    
+
                 result.append(ys)
                 
         result = backends.cuda.to_cpu(self.xp.concatenate([self.xp.expand_dims(x, 0) for x in result]).T)
