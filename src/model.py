@@ -186,9 +186,10 @@ class Model(chainer.Chain):
                 PRETRAINED_MODEL_PATH = args.pretrained_model_path
                 self.pretrained_decoder = Decoder(n_layers, n_units, dropout)
                 serializers.load_npz(PRETRAINED_MODEL_PATH, self.pretrained_decoder)
-                if args.gpu >= 0:
-                    backends.cuda.get_device(args.gpu).use()
-                    self.pretrained_decoder.to_gpu(args.gpu)
+                
+        if args.use_pretrained_model and args.gpu >= 0:
+            backends.cuda.get_device(args.gpu).use()
+            self.pretrained_decoder.to_gpu(args.gpu)
             
         self.w2id = w2id
         self.id2w = id2w

@@ -17,6 +17,22 @@ from utils import *
 
 
 
+def get_train_test_idxs(path):
+    train_idxs = []
+    test_idxs = []
+    with open(path, 'r') as f:
+        for line in f:
+            if 'TRAIN' in line.strip():
+                s = line.strip().replace('"', '').split(';')
+                train_idxs.append(int(s[0].replace('essay', ''))-1)
+            elif 'TEST' in line.strip():
+                s = line.strip().replace('"', '').split(';')
+                test_idxs.append(int(s[0].replace('essay', ''))-1)
+    return train_idxs, test_idxs
+
+
+
+
 class Decoder(chainer.Chain):
     
     def __init__(self, n_layers, n_units, dropout):
@@ -111,8 +127,13 @@ def main(args):
             xs = pickle.load(f)
     contexts = load_data(args.data_dir+'contexts.pickle')
     
-    xs.extend(contexts)
+    # train, test idxs
+    train_idxs, _ = get_train_test_idxs(args.idx_path)
     
+    train_contexts = [contexts[idx] for idx in train_idxs]
+
+    xs.extend(train_contexts)
+
     xs_flatten = [w for x in xs for w in x]
     counter = collections.Counter(xs_flatten)
     count_words = counter.most_common()
