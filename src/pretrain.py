@@ -122,8 +122,7 @@ def load_data(path):
     return d
 
 
-def save_figs_(save_dir, current_epoch, train_mean_losses, train_mean_perplexitys, \
-               dev_mean_losses, dev_mean_perplexitys):
+def save_figs_(save_dir, current_epoch, train_mean_losses, dev_mean_perplexitys):
     plt.switch_backend('agg')
     epoch = np.arange(1, current_epoch+1)
     fig = plt.figure(1)
@@ -131,7 +130,6 @@ def save_figs_(save_dir, current_epoch, train_mean_losses, train_mean_perplexity
     plt.xlabel('epoch')
     plt.ylabel('mean loss')
     plt.plot(epoch, train_mean_losses, label='loss(train)')
-    plt.plot(epoch, dev_mean_losses, label='loss(dev)')
     plt.legend()
     plt.savefig(save_dir+'mean_losses.{}.png'.format(current_epoch))
 
@@ -139,7 +137,6 @@ def save_figs_(save_dir, current_epoch, train_mean_losses, train_mean_perplexity
     plt.title('mean perplexitys')
     plt.xlabel('epoch')
     plt.ylabel('mean perplexity')
-    plt.plot(epoch, train_mean_perplexitys, label='perplexity(train)')
     plt.plot(epoch, dev_mean_perplexitys, label='perplexity(dev)')
     plt.legend()
     plt.savefig(save_dir+'mean_perplexitys.{}.png'.format(current_epoch))
@@ -218,13 +215,9 @@ def main(args):
 
     # initialize reporter
     train_loss_reporter = ScoreReporter(args.mb_size, train_size)
-    train_perplexity_reporter = ScoreReporter(args.mb_size, train_size)
-    dev_loss_reporter = ScoreReporter(args.mb_size, dev_size)
     dev_perplexity_reporter = ScoreReporter(args.mb_size, dev_size)
 
     train_mean_losses = []
-    train_mean_perplexitys = []
-    dev_mean_losses = []
     dev_mean_perplexitys = []
     # train, dev loop
     for epoch in range(args.max_epoch):
@@ -234,37 +227,25 @@ def main(args):
             train_xs_mb = train_xs[mb:mb+args.mb_size]
             model.cleargrads()
             loss = model(train_xs_mb)
-            perplexity = model.perplexity(train_xs_mb)
             train_loss_reporter.add(backends.cuda.to_cpu(loss.data))
-            train_perplexity_reporter.add(backends.cuda.to_cpu(perplexity.data))
             loss.backward()
             optimizer.update()
 
         train_mean_loss = train_loss_reporter.mean()
-        train_mean_perplexity = train_perplexity_reporter.mean()
         train_mean_losses.append(train_mean_loss)
-        train_mean_perplexitys.append(train_mean_perplexity)
 
         print('train mean loss: {}'.format(train_mean_loss))
-        print('train mean perpleixity: {}'.format(train_mean_perplexity))
 
         for mb in range(0, dev_size, args.mb_size):
             dev_xs_mb = dev_xs[mb:mb+args.mb_size]
-            dev_loss = model(dev_xs_mb)
             dev_perplexity = model.perplexity(dev_xs_mb)
-            dev_loss_reporter.add(backends.cuda.to_cpu(dev_loss.data))
             dev_perplexity_reporter.add(backends.cuda.to_cpu(dev_perplexity.data))
 
-        dev_mean_loss = dev_loss_reporter.mean()
         dev_mean_perplexity = dev_perplexity_reporter.mean()
-        dev_mean_losses.append(dev_mean_loss)
         dev_mean_perplexitys.append(dev_mean_perplexity)
-        print('dev mean loss: {}'.format(dev_mean_loss))
         print('dev mean perplexity: {}'.format(dev_mean_perplexity))
 
         train_loss_reporter = ScoreReporter(args.mb_size, train_size)
-        train_perplexity_reporter = ScoreReporter(args.mb_size, train_size)
-        dev_loss_reporter = ScoreReporter(args.mb_size, dev_size)
         dev_perplexity_reporter = ScoreReporter(args.mb_size, dev_size)
 
         if args.save_dir:
@@ -272,10 +253,10 @@ def main(args):
             serializers.save_npz(args.save_dir+str(epoch+1)+'embed.model', model.embed)
             serializers.save_npz(args.save_dir+str(epoch+1)+'pretrained.model', model)
             serializers.save_npz(args.save_dir+str(epoch+1)+'optimizer.model', optimizer)
-            save_figs_(args.save_dir, epoch+1, train_mean_losses, train_mean_perplexitys, \
-                       dev_mean_losses, dev_mean_perplexitys)
-            np.savez(args.save_dir+'mean_perplexitys.npz', x=np.asarray(train_mean_perplexitys), y=np.asarray(dev_mean_perplexitys))
-            np.savez(args.save_dir+'mean_losses.npz', x=np.asarray(train_mean_losses), y=np.asarray(dev_mean_losses))
+            save_figs_(args.save_dir, epoch+1, train_mean_losses, dev_mean_perplexitys)
+            save_args(args.save_dir, args)
+            np.savez(args.save_dir+'mean_perplexitys.npz', x=np.asarray(dev_mean_perplexitys))
+            np.savez(args.save_dir+'mean_losses.npz', x=np.asarray(train_mean_losses))
 
 
         end = time.time()

@@ -90,11 +90,8 @@ def save_figs(save_dir, current_epoch, train_mean_losses, train_mean_losses1, tr
 
 
 
-def save_args(save_dir, *args):
-    keys = ["n_layers", "n_layers2", "n_units", "attn_n_units", "eta", "max_epoch", "mb_size", "dropout", \
-            "max_length", "threshold", "learning_rate", "use_pretrained_model", "use_label_in", "use_rnn3"]
-    #assert len(args) == len(keys)
-    args_dict = {k: a for k, a in zip(keys, args)}
+def save_args(save_dir, args):
+    args_dict = {k: v for k, a in args._get_kwargs()}
     
     f = open(save_dir+'args.json', 'w')
     json.dump(args_dict, f)

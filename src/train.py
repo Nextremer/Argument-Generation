@@ -44,22 +44,7 @@ def calculateBleu(hypothesis, reference):
 def main(args):
     # save args
     if args.save_dir:
-        save_args(
-            args.save_dir,
-            args.n_layers,
-            args.n_layers2,
-            args.n_units, 
-            args.attn_n_units,
-            args.eta,
-            args.max_epoch,
-            args.mb_size,
-            args.dropout,
-            args.max_length,
-            args.threshold,
-            args.learning_rate,
-            args.use_pretrained_model,
-            args.use_label_in,
-            args.use_rnn3)
+        save_args(args.save_dir, args)
             
     # load data(tokenized word) 
     topics = load_data(args.data_dir+'topics.pickle')
