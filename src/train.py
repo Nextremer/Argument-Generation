@@ -71,8 +71,12 @@ def main(args):
     # train, test idxs
     train_idxs, test_idxs = get_train_test_idxs(args.idx_path)
     
-    # train, test size
+    # train, dev idxs
+    train_idxs, dev_idxs = train_idxs[:args.train_size], train_idxs[args.train_size:]
+    
+    # train, dev, test size
     train_size = len(train_idxs)
+    dev_size = len(dev_idxs)
     test_size = len(test_idxs)
 
     # word2vec
@@ -82,19 +86,32 @@ def main(args):
     # w2id
     w2id = defaultdict(lambda: len(w2id))
 
-    # train, test split
+    # train, dev, test split
     train_topics = [get_wid_seq(topics[idx], w2id, is_make=True) for idx in train_idxs]
     train_contexts = [get_wid_seq(contexts[idx], w2id, is_make=True) for idx in train_idxs]
     train_type_seqs = [np.array(type_seqs[idx], dtype=np.int32) for idx in train_idxs]
     train_rel_seqs = [np.array(rel_seqs[idx], dtype=np.int32) for idx in train_idxs]
     train_dist_seqs = [np.array(dist_seqs[idx], dtype=np.int32) for idx in train_idxs]
-
+    
     idxs = sorted(np.arange(0, train_size), key=lambda x: len(train_contexts[x]), reverse=True)
     train_topics = [train_topics[idx] for idx in idxs]
     train_contexts = [train_contexts[idx] for idx in idxs]
     train_type_seqs = [train_type_seqs[idx] for idx in idxs]
     train_rel_seqs = [train_rel_seqs[idx] for idx in idxs]
     train_dist_seqs = [train_dist_seqs[idx] for idx in idxs]
+    
+    dev_topics = [topics[idx] for idx in dev_idxs]
+    dev_contexts = [contexts[idx] for idx in dev_idxs]
+    dev_type_seqs = [np.array(type_seqs[idx], dtype=np.int32) for idx in dev_idxs]
+    dev_rel_seqs = [np.array(rel_seqs[idx], dtype=np.int32) for idx in dev_idxs]
+    dev_dist_seqs = [np.array(dist_seqs[idx], dtype=np.int32) for idx in dev_idxs]
+    
+    idxs = sorted(np.arange(0, dev_size), key=lambda x: len(dev_contexts[x]), reverse=True)
+    dev_topics = [dev_topics[idx] for idx in idxs]
+    dev_contexts = [dev_contexts[idx] for idx in idxs]
+    dev_type_seqs = [dev_type_seqs[idx] for idx in idxs]
+    dev_rel_seqs = [dev_rel_seqs[idx] for idx in idxs]
+    dev_dist_seqs = [dev_dist_seqs[idx] for idx in idxs]
 
     test_topics = [topics[idx] for idx in test_idxs]
     test_contexts = [contexts[idx] for idx in test_idxs]
@@ -137,9 +154,9 @@ def main(args):
     train_mean_losses_label = []
     train_mean_losses = []
     train_mean_bleus = []
-    test_mean_bleus = []
+    dev_mean_bleus = []
     
-    # train test loop
+    # train dev loop
     for epoch in range(args.max_epoch):
         print('epoch: {}'.format(epoch+1))
         start_time = time.time()
@@ -210,21 +227,21 @@ def main(args):
         train_loss_label_reporter = ScoreReporter(args.mb_size, train_size)
         train_loss_reporter = ScoreReporter(args.mb_size, train_size)
 
-        test_mean_bleu = 0
-        # generate argument(test)
-        for mb in range(0, test_size, args.mb_size):
-            test_idx_mb = test_idxs[mb:mb+args.mb_size]
-            test_topics_mb = [topics[idx] for idx in test_idx_mb]
-            arguments = model.generate(test_topics_mb, args.max_length)
+        dev_mean_bleu = 0
+        # generate argument(dev)
+        for mb in range(0, dev_size, args.mb_size):
+            dev_idx_mb = dev_idxs[mb:mb+args.mb_size]
+            dev_topics_mb = [topics[idx] for idx in dev_idx_mb]
+            arguments = model.generate(dev_topics_mb, args.max_length)
 
             outs = []
             for i, argument in enumerate(arguments):
                 topic = ''
-                for w in topics[test_idxs[mb+i]]:
+                for w in topics[dev_idxs[mb+i]]:
                     topic += w
                     topic += ' '
-                bleu = calculateBleu(argument, contexts[test_idxs[mb+i]])
-                test_mean_bleu += bleu
+                bleu = calculateBleu(argument, contexts[dev_idxs[mb+i]])
+                dev_mean_bleu += bleu
                 out = ''
                 for w in argument:
                     out += w
@@ -232,30 +249,30 @@ def main(args):
                 if args.save_dir:
                     with open(args.save_dir+'arguments.txt', 'a') as f:
                         f.write('-'*50+'\n')
-                        f.write('test\n')
+                        f.write('dev\n')
                         f.write('epoch: '+str(epoch+1)+'\n')
                         f.write('topic: '+topic+'\n')
                         f.write('argument: '+out+'\n')
                 outs.append(out)
 
             print('-'*100)
-            print('test')
+            print('dev')
             print('topic:')
             print(topic)
             print('generated argument:')
             print(outs[0])
 
-        test_mean_bleu /= float(test_size)
-        test_mean_bleus.append(test_mean_bleu)
-        print('test mean bleu: '+str(test_mean_bleu))
+        dev_mean_bleu /= float(dev_size)
+        dev_mean_bleus.append(dev_mean_bleu)
+        print('dev mean bleu: '+str(dev_mean_bleu))
                     
         if args.save_dir:
             # save figs
             save_figs(\
                 args.save_dir, epoch+1, train_mean_losses, train_mean_losses_w, train_mean_losses_label, \
-                train_mean_bleus, test_mean_bleus)
+                train_mean_bleus, dev_mean_bleus)
             
-            np.savez(args.save_dir+'mean_bleus.npz', x=np.asarray(train_mean_bleus), y=np.asarray(test_mean_bleus))
+            np.savez(args.save_dir+'mean_bleus.npz', x=np.asarray(train_mean_bleus), y=np.asarray(dev_mean_bleus))
             np.savez(args.save_dir+'mean_losses.npz', x=np.asarray(train_mean_losses), y=np.asarray(train_mean_losses_w), \
                      z=np.asarray(train_mean_losses_label))
 
@@ -279,6 +296,7 @@ if __name__ == '__main__':
     parser.add_argument('--eta', type=float, default=1.0)
     parser.add_argument('--max_epoch', type=int, default=20)
     parser.add_argument('--mb_size', type=int, default=16)
+    parser.add_argument('--train_size', type=int, default=300)
     parser.add_argument('--dropout', type=float, default=0.5)
     parser.add_argument('--max_length', type=int, default=100)
     parser.add_argument('--threshold', type=float, default=5.0)
