@@ -68,6 +68,7 @@ class PretrainedModel(chainer.Chain):
     def __init__(self, w2id, id2w, w2vec, n_layers, n_units, dropout):
 
         n_vocab = len(w2id)
+        self.dropout = dropout
 
         super(PretrainedModel, self).__init__()
         with self.init_scope():
@@ -95,6 +96,7 @@ class PretrainedModel(chainer.Chain):
         _, _, dhs = self.decoder(None, None, exs)
 
         concat_dhs = F.concat(dhs, axis=0)
+        concat_dhs = F.dropout(concat_dhs, self.dropout)
 
         return concat_dhs, concat_xs_out
 
@@ -176,7 +178,7 @@ def main(args):
     train_xs_flatten = [w for x in train_xs for w in x]
     counter = collections.Counter(train_xs_flatten)
     count_words = counter.most_common()
-
+    
     # vocab_size most frequent words
     freq_words = [i[0] for i in count_words[:args.vocab_size]]
 
@@ -217,6 +219,9 @@ def main(args):
     train_loss_reporter = ScoreReporter(args.mb_size, train_size)
     dev_perplexity_reporter = ScoreReporter(args.mb_size, dev_size)
 
+    if args.save_dir:
+        save_args(args.save_dir, args)
+
     train_mean_losses = []
     dev_mean_perplexitys = []
     # train, dev loop
@@ -254,10 +259,8 @@ def main(args):
             serializers.save_npz(args.save_dir+str(epoch+1)+'pretrained.model', model)
             serializers.save_npz(args.save_dir+str(epoch+1)+'optimizer.model', optimizer)
             save_figs_(args.save_dir, epoch+1, train_mean_losses, dev_mean_perplexitys)
-            save_args(args.save_dir, args)
             np.savez(args.save_dir+'mean_perplexitys.npz', x=np.asarray(dev_mean_perplexitys))
             np.savez(args.save_dir+'mean_losses.npz', x=np.asarray(train_mean_losses))
-
 
         end = time.time()
         print('elapsed time per epoch: {}'.format(str(end-start)))

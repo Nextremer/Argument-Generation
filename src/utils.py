@@ -91,7 +91,7 @@ def save_figs(save_dir, current_epoch, train_mean_losses, train_mean_losses1, tr
 
 
 def save_args(save_dir, args):
-    args_dict = {k: v for k, a in args._get_kwargs()}
+    args_dict = {k: v for k, v in args._get_kwargs()}
     
     f = open(save_dir+'args.json', 'w')
     json.dump(args_dict, f)
