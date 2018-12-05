@@ -221,11 +221,13 @@ def main(args):
         model.to_gpu(args.gpu)
 
     # optimizer
-    optimizer = optimizers.Adam()
+    #optimizer = optimizers.Adam()
+    optimizer = optimizers.AdaGrad()
     optimizer.setup(model)
     optimizer.add_hook(chainer.optimizer.GradientClipping(args.threshold))
     optimizer.add_hook(chainer.optimizer.WeightDecay(args.rate))
     
+    # if resume training
     if args.resume:
         serializers.load_npz(args.saved_model_path, model)
         serializers.load_npz(args.saved_opt_path, optimizer)
