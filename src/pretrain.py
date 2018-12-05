@@ -150,6 +150,10 @@ def _filter(xs, min_len):
     return xs
 
 def main(args):
+    # save args
+    if args.save_dir:
+        save_args(args.save_dir, args)
+
     # w2vec(glove.6B)
     f = open(args.w2vec_path, 'r')
     w2vec = {line.strip().split(' ')[0]: np.array(line.strip().split(' ')[1:], dtype=np.float32) for line in f}
@@ -168,12 +172,12 @@ def main(args):
     train_contexts = [contexts[idx] for idx in train_idxs[:args.stab_train_size]]
     dev_contexts = [contexts[idx] for idx in train_idxs[args.stab_train_size:]]
 
-    random.seed(12345)
-
     # train, dev data
     train_xs.extend(train_contexts)
-    random.shuffle(train_xs)
     dev_xs.extend(dev_contexts)
+    
+    random.seed(12345)
+    random.shuffle(train_xs)
 
     train_xs_flatten = [w for x in train_xs for w in x]
     counter = collections.Counter(train_xs_flatten)
@@ -214,18 +218,22 @@ def main(args):
     optimizer.setup(model)
     optimizer.add_hook(chainer.optimizer.GradientClipping(args.threshold))
     optimizer.add_hook(chainer.optimizer.WeightDecay(args.rate))
+    
+    if args.resume:
+        serializers.load_npz(args.saved_model_path, model)
+        serializers.load_npz(args.saved_opt_path, optimizer)
+        train_mean_losses = np.load(args.save_dir+'mean_losses.npz')['x']
+        dev_mean_perplexitys = np.load(args.save_dir+'mean_perplexitys.npz')['x']
+    else:
+        train_mean_losses = []
+        dev_mean_perplexitys = []
 
     # initialize reporter
     train_loss_reporter = ScoreReporter(args.mb_size, train_size)
     dev_perplexity_reporter = ScoreReporter(args.mb_size, dev_size)
 
-    if args.save_dir:
-        save_args(args.save_dir, args)
-
-    train_mean_losses = []
-    dev_mean_perplexitys = []
     # train, dev loop
-    for epoch in range(args.max_epoch):
+    for epoch in range(args.resume_epoch, args.max_epoch):
         start = time.time()
         print('epoch: {}'.format(epoch+1))
         for mb in range(0, train_size, args.mb_size):
@@ -275,6 +283,8 @@ if __name__ == '__main__':
     parser.add_argument('--stab_data_dir')
     parser.add_argument('--save_dir')
     parser.add_argument('--idx_path')
+    parser.add_argument('--saved_model_path')
+    parser.add_argument('--saved_opt_path')
     parser.add_argument('--gpu', type=int, default=-1, help='GPU ID (negative value indicates CPU)')
     parser.add_argument('--max_epoch', type=int, default=100)
     parser.add_argument('--mb_size', type=int, default=128)
@@ -284,6 +294,8 @@ if __name__ == '__main__':
     parser.add_argument('--threshold', type=float, default=5.0)
     parser.add_argument('--rate', type=float, default=5e-4)
     parser.add_argument('--dropout', type=float, default=0.2)
+    parser.add_argument('--resume_epoch', type=int, default=0)
+    parser.add_argument('--resume', action='store_true')
     args = parser.parse_args()
 
     main(args)
