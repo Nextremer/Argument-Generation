@@ -44,6 +44,7 @@ class Decoder(chainer.Chain):
         return self.decoder(h, c, xs)
 
 
+
 class Embed(chainer.Chain):
 
     def __init__(self, w2id, id2w, w2vec, n_units):
@@ -80,6 +81,7 @@ class PretrainedModel(chainer.Chain):
         batchsize = len(xs)
         concat_dhs, concat_xs_out = self.forward(xs)
         loss = F.sum(F.softmax_cross_entropy(self.W(concat_dhs), concat_xs_out, reduce='no'))/batchsize
+        
         return loss
 
     def forward(self, xs):
@@ -87,6 +89,7 @@ class PretrainedModel(chainer.Chain):
 
         xs_in = [x[:-1] for x in xs]
         xs_out = [x[1:] for x in xs]
+        
         concat_xs_out = F.concat(xs_out, axis=0)
 
         exs = self.sequence_embed(self.embed, xs_in)
@@ -103,6 +106,7 @@ class PretrainedModel(chainer.Chain):
         x_section = np.cumsum(x_len[:-1])
         ex = embed(F.concat(xs, axis=0))
         exs = F.split_axis(ex, x_section, axis=0)
+        
         return exs
 
     def perplexity(self, xs):
@@ -120,6 +124,7 @@ def load_data(path):
     with open(path, 'rb') as f:
         d = pickle.load(f)
     return d
+
 
 
 def save_figs_(save_dir, current_epoch, train_mean_losses, dev_mean_perplexitys):
@@ -145,7 +150,10 @@ def save_figs_(save_dir, current_epoch, train_mean_losses, dev_mean_perplexitys)
 
 def _filter(xs, min_len):
     xs = [x for x in xs if len(x) >= min_len]
+    
     return xs
+
+
 
 def main(args):
     # save args
@@ -198,6 +206,7 @@ def main(args):
     dev_xs = [get_wid_seq(x, w2id, is_make=False) for x in dev_xs]
 
     train_xs = _filter(train_xs, args.min_len)
+    dev_xs = _filter(dev_xs, args.min_len)
 
     # size
     train_size = len(train_xs)
