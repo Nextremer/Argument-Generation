@@ -72,9 +72,7 @@ class PretrainedModel(chainer.Chain):
 
         super(PretrainedModel, self).__init__()
         with self.init_scope():
-            #self.embed = L.EmbedID(n_vocab, n_units, initialW=init_W)
             self.embed = Embed(w2id, id2w, w2vec, n_units)
-            #self.decoder = L.NStepLSTM(n_layers, n_units, n_units, dropout=dropout)
             self.decoder = Decoder(n_layers, n_units, dropout)
             self.W = L.Linear(n_units, n_vocab)
 
