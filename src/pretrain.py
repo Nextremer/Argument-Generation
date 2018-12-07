@@ -55,10 +55,10 @@ class Embed(chainer.Chain):
 
     def __init__(self, w2id, id2w, w2vec, n_units):
         n_vocab = len(w2id)
-
-        init_W = [w2vec[id2w[i]] if id2w[i] in w2vec.keys() \
+        
+        init_W = [w2vec[w] if w in w2vec.keys() \
                   else np.random.normal(scale=np.sqrt(2./n_units), size=(n_units, )) \
-                  for i, w in id2w.items()]
+                  for w in w2id.keys()]
         init_W = np.asarray(init_W, dtype=np.float32)
 
         super(Embed, self).__init__()
