@@ -14,7 +14,9 @@ from pretrain import *
 
 EOS = 0
 UNK = 1
-EOL = 0
+EOL1 = 7
+EOL2 = 5
+EOL3 = 21
 
 
 
@@ -143,38 +145,49 @@ class Attention(chainer.Chain):
     
 class Model(chainer.Chain):
 
-    def __init__(self, args, w2id, id2w, w2vec):
+    def __init__(self, args, w2id, id2w, pretrain_w2id, pretrain_id2w, w2vec):
         n_layers = args.n_layers
         n_layers2 = args.n_layers2
         n_units = args.n_units
         attn_n_units = args.attn_n_units
-        eta = args.eta
         dropout = args.dropout
         
         n_vocab = len(w2id)
-        n_label1 = 7
-        n_label2 = 5
-        n_label3 = 21
+        n_label1 = 8
+        n_label2 = 6
+        n_label3 = 22
         l_n_units = 10
-
-        init_W = [w2vec[id2w[i]] if id2w[i] in w2vec.keys() \
-                  else np.random.normal(scale=np.sqrt(2./n_units), size=(n_units, )) \
-                  for i, w in id2w.items()]
+        
+        if args.use_pretrained_embed:
+            PRETRAINED_EMBED_PATH = args.pretrained_embed_path
+            self.pretrained_embed = Embed(pretrain_w2id, pretrain_id2w, w2vec, n_units)
+            serializers.load_npz(PRETRAINED_EMBED_PATH, self.pretrained_embed)
+            init_W = []
+            for w in w2id.keys():
+                if w in pretrain_w2id.keys():
+                    init_W.append(self.pretrained_embed(\
+                                                        np.array([pretrain_w2id[w]], dtype=np.int32)).data[0])
+                elif w not in pretrain_w2id.keys() and w in w2vec.keys():
+                    init_W.append(w2vec[w])
+                else:
+                    init_W.append(np.random.normal(scale=np.sqrt(2./n_units), size=(n_units, )))
+        else:            
+            init_W = [w2vec[w] if w in w2vec.keys() \
+                      else np.random.normal(scale=np.sqrt(2./n_units), size=(n_units, )) \
+                      for w in w2id.keys()]
         init_W = np.asarray(init_W, dtype=np.float32)
         
         super(Model, self).__init__()
         with self.init_scope():
             self.embed = L.EmbedID(n_vocab, n_units, initialW=init_W)
-            self.embed_l1 = L.EmbedID(n_label1, l_n_units)
-            self.embed_l2 = L.EmbedID(n_label2, l_n_units)
-            self.embed_l3 = L.EmbedID(n_label3, l_n_units)
             self.encoder = L.NStepLSTM(n_layers, n_units, n_units, dropout=dropout)
             if args.use_label_in:
-                self.decoder1 = L.NStepLSTM(n_layers, n_units+3*l_n_units, n_units, dropout=dropout)
-            else:
-                self.decoder1 = L.NStepLSTM(n_layers, n_units, n_units, dropout=dropout)
-            self.decoder2 = L.NStepLSTM(n_layers2, n_units, n_units, dropout=dropout)
-            self.W_in = L.Linear(n_units+3*l_n_units, n_units)
+                self.embed_l1 = L.EmbedID(n_label1, l_n_units)
+                self.embed_l2 = L.EmbedID(n_label2, l_n_units)
+                self.embed_l3 = L.EmbedID(n_label3, l_n_units)
+                self.W_in = L.Linear(n_units+3*l_n_units, n_units)
+            if args.use_rnn3:
+                self.decoder2 = L.NStepLSTM(n_layers2, n_units, n_units, dropout=dropout)
             self.W_y = L.Linear(n_units, n_vocab)
             self.W_l1 = L.Linear(n_units, n_label1)
             self.W_l2 = L.Linear(n_units, n_label2)
@@ -182,23 +195,27 @@ class Model(chainer.Chain):
             
             self.attention = Attention(n_units, n_units, attn_n_units)
         
-            if args.use_pretrained_model:
-                PRETRAINED_MODEL_PATH = args.pretrained_model_path
+            if args.use_pretrained_decoder:
+                PRETRAINED_DECODER_PATH = args.pretrained_decoder_path
                 self.pretrained_decoder = Decoder(n_layers, n_units, dropout)
-                serializers.load_npz(PRETRAINED_MODEL_PATH, self.pretrained_decoder)
+                serializers.load_npz(PRETRAINED_DECODER_PATH, self.pretrained_decoder)
+            else:
+                self.decoder1 = L.NStepLSTM(n_layers, n_units, n_units, dropout=dropout)                
                 
-        if args.use_pretrained_model and args.gpu >= 0:
+        if args.use_pretrained_decoder and args.gpu >= 0:
             backends.cuda.get_device(args.gpu).use()
             self.pretrained_decoder.to_gpu(args.gpu)
             
         self.w2id = w2id
         self.id2w = id2w
         self.w2vec = w2vec
-        self.eta = eta
-        self.use_pretrained_model = args.use_pretrained_model
+        
+        self.eta = args.eta
+        self.use_pretrained_decoder = args.use_pretrained_decoder
         self.use_label_in = args.use_label_in
         self.use_rnn3 = args.use_rnn3
-        
+        self.dropout = args.dropout
+
     def __call__(self, xs, ys, ls):
         lhs, ls1_out, ls2_out, ls3_out, concat_os, concat_ys_out = self.forward(xs, ys, ls)
         if self.use_label_in:
@@ -218,15 +235,15 @@ class Model(chainer.Chain):
         concat_ls3_out = F.concat(ls3_out, axis=0)
         
         batchsize = len(xs)
-        loss1 = F.sum(F.softmax_cross_entropy(self.W_y(concat_os), concat_ys_out, reduce='no'))/batchsize
-        loss2 = F.sum(F.softmax_cross_entropy(self.W_l1(concat_lhs), concat_ls1_out, reduce='no'))/batchsize
-        loss3 = F.sum(F.softmax_cross_entropy(self.W_l2(concat_lhs), concat_ls2_out, reduce='no'))/batchsize
-        loss4 = F.sum(F.softmax_cross_entropy(self.W_l3(concat_lhs), concat_ls3_out, reduce='no'))/batchsize
+        loss_w = F.sum(F.softmax_cross_entropy(self.W_y(concat_os), concat_ys_out, reduce='no'))/batchsize
+        loss_l1 = F.sum(F.softmax_cross_entropy(self.W_l1(concat_lhs), concat_ls1_out, reduce='no'))/batchsize
+        loss_l2 = F.sum(F.softmax_cross_entropy(self.W_l2(concat_lhs), concat_ls2_out, reduce='no'))/batchsize
+        loss_l3 = F.sum(F.softmax_cross_entropy(self.W_l3(concat_lhs), concat_ls3_out, reduce='no'))/batchsize
 
-        loss_l = loss2 + loss3 + loss4
-        loss = loss1 + self.eta * loss_l
+        loss_l = loss_l1 + loss_l2 + loss_l3
+        loss = loss_w + self.eta * loss_l
         
-        return loss1, loss_l, loss
+        return loss_w, loss_l, loss
 
     def forward(self, xs, ys, ls):
         batchsize = len(xs)
@@ -238,7 +255,9 @@ class Model(chainer.Chain):
         ls3 = [self.xp.array(l, dtype=self.xp.int32) for l in ls3]
         
         eos = self.xp.array([EOS], dtype=self.xp.int32)
-        eol = self.xp.array([EOL], dtype=self.xp.int32)
+        eol1 = self.xp.array([EOL1], dtype=self.xp.int32)
+        eol2 = self.xp.array([EOL2], dtype=self.xp.int32)
+        eol3 = self.xp.array([EOL3], dtype=self.xp.int32)
 
         ys_in = [F.concat([eos, y], axis=0) for y in ys]
         ys_out = [F.concat([y, eos], axis=0) for y in ys]
@@ -249,13 +268,13 @@ class Model(chainer.Chain):
         eys = self.sequence_embed(self.embed, ys_in)
         
         if self.use_label_in:
-            ls1_in = [F.concat([eol, l], axis=0) for l in ls1]
-            ls2_in = [F.concat([eol, l], axis=0) for l in ls2]
-            ls3_in = [F.concat([eol, l], axis=0) for l in ls3]
+            ls1_in = [F.concat([eol1, l], axis=0) for l in ls1]
+            ls2_in = [F.concat([eol2, l], axis=0) for l in ls2]
+            ls3_in = [F.concat([eol3, l], axis=0) for l in ls3]
 
-            ls1_out = [F.concat([l, eol], axis=0) for l in ls1]
-            ls2_out = [F.concat([l, eol], axis=0) for l in ls2]
-            ls3_out = [F.concat([l, eol], axis=0) for l in ls3]
+            ls1_out = [F.concat([l, eol1], axis=0) for l in ls1]
+            ls2_out = [F.concat([l, eol2], axis=0) for l in ls2]
+            ls3_out = [F.concat([l, eol3], axis=0) for l in ls3]
 
             els1 = self.sequence_embed(self.embed_l1, ls1_in)
             els2 = self.sequence_embed(self.embed_l2, ls2_in)
@@ -269,17 +288,24 @@ class Model(chainer.Chain):
             eys = F.split_axis(eys, eys_section, axis=0)
 
         else:
-            ls1_out = [F.concat([eol, l], axis=0) for l in ls1]
-            ls2_out = [F.concat([eol, l], axis=0) for l in ls2]
-            ls3_out = [F.concat([eol, l], axis=0) for l in ls3]
+            ls1_out = [F.concat([eol1, l], axis=0) for l in ls1]
+            ls2_out = [F.concat([eol2, l], axis=0) for l in ls2]
+            ls3_out = [F.concat([eol3, l], axis=0) for l in ls3]
         
         assert len(ys_out) == len(ls1_out) == len(ls2_out) == len(ls3_out)
 
         h, c, ehs = self.encoder(None, None, exs)
-        if self.use_pretrained_model:
+
+        if self.use_pretrained_decoder:
             _, _, dhs = self.pretrained_decoder(h, c, eys)
         else:
             _, _, dhs = self.decoder1(h, c, eys)
+        
+        dhs_len = [len(dh) for dh in dhs]
+        dhs_section = np.cumsum(dhs_len[:-1])
+        concat_dhs = F.concat(dhs, axis=0)
+        concat_dhs = F.dropout(concat_dhs, self.dropout)
+        dhs = F.split_axis(concat_dhs, dhs_section, axis=0)
         
         yhs = self.attention(ehs, dhs)
         concat_yhs = F.concat(yhs, axis=0)
@@ -287,6 +313,8 @@ class Model(chainer.Chain):
         if self.use_rnn3:
             _, _, lhs = self.decoder2(None, None, dhs)
             return lhs, ls1_out, ls2_out, ls3_out, concat_yhs, concat_ys_out
+        elif self.use_label_in:
+            return yhs, ls1_out, ls2_out, ls3_out, concat_yhs, concat_ys_out
         else:
             return dhs, ls1_out, ls2_out, ls3_out, concat_yhs, concat_ys_out
         
@@ -304,9 +332,9 @@ class Model(chainer.Chain):
             
             ys = self.xp.full(batchsize, EOS, dtype=self.xp.int32)
             if self.use_label_in:
-                ls1 = self.xp.full(batchsize, EOL, dtype=self.xp.int32)
-                ls2 = self.xp.full(batchsize, EOL, dtype=self.xp.int32)
-                ls3 = self.xp.full(batchsize, EOL, dtype=self.xp.int32)
+                ls1 = self.xp.full(batchsize, EOL1, dtype=self.xp.int32)
+                ls2 = self.xp.full(batchsize, EOL2, dtype=self.xp.int32)
+                ls3 = self.xp.full(batchsize, EOL3, dtype=self.xp.int32)
             
             h_l, c_l = None, None
             result = []
