@@ -257,9 +257,12 @@ def main(args):
     train_size = len(train_xs)
     dev_size = len(dev_xs)
     test_size = len(test_xs)
+    
+    n_layers = 3
+    n_units = 200
 
     # define model
-    model = PretrainedModel(w2id, id2w, w2vec, 3, 200, args.dropout)
+    model = PretrainedModel(w2id, id2w, w2vec, n_layers, n_units, args.dropout)
 
     # Use GPU
     if args.gpu >= 0:
