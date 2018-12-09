@@ -158,15 +158,14 @@ class Model(chainer.Chain):
         n_label3 = 22
         l_n_units = 10
         
-        if args.pretrained_embed_path:
-            PRETRAINED_EMBED_PATH = args.pretrained_embed_path
+        if args.pretrained_embed_path and args.gpu >= 0:
             self.pretrained_embed = Embed(pretrain_w2id, pretrain_id2w, w2vec, n_units)
-            serializers.load_npz(PRETRAINED_EMBED_PATH, self.pretrained_embed)
+            serializers.load_npz(args.pretrained_embed_path, self.pretrained_embed)
+
             init_W = []
             for w in w2id.keys():
                 if w in pretrain_w2id.keys():
-                    init_W.append(self.pretrained_embed(\
-                                                        np.array([pretrain_w2id[w]], dtype=np.int32)).data[0])
+                    init_W.extend(self.pretrained_embed(np.array([pretrain_w2id[w]], dtype=np.int32)).data)
                 elif w not in pretrain_w2id.keys() and w in w2vec.keys():
                     init_W.append(w2vec[w])
                 else:
@@ -196,22 +195,28 @@ class Model(chainer.Chain):
             self.attention = Attention(n_units, n_units, attn_n_units)
         
             if args.pretrained_decoder_path:
-                PRETRAINED_DECODER_PATH = args.pretrained_decoder_path
                 self.pretrained_decoder = Decoder(n_layers, n_units, dropout)
-                serializers.load_npz(PRETRAINED_DECODER_PATH, self.pretrained_decoder)
+                serializers.load_npz(args.pretrained_decoder_path, self.pretrained_decoder)
             else:
                 self.decoder1 = L.NStepLSTM(n_layers, n_units, n_units, dropout=dropout)                
                 
         if args.pretrained_decoder_path and args.gpu >= 0:
             backends.cuda.get_device(args.gpu).use()
             self.pretrained_decoder.to_gpu(args.gpu)
+        if args.pretrained_embed_path and args.gpu >= 0:
+            backends.cuda.get_device(args.gpu).use()
+            self.pretrained_embed.to_gpu(args.gpu)
             
         self.w2id = w2id
         self.id2w = id2w
         self.w2vec = w2vec
         
+        self.pretrain_w2id = pretrain_w2id
+        self.pretrain_id2w = pretrain_id2w
+        
         self.eta = args.eta
         self.pretrained_decoder_path = args.pretrained_decoder_path
+        self.pretrained_embed_path = args.pretrained_embed_path
         self.use_label_in = args.use_label_in
         self.use_rnn3 = args.use_rnn3
         self.dropout = args.dropout
@@ -320,14 +325,28 @@ class Model(chainer.Chain):
     def generate(self, xs, max_length):
         batchsize = len(xs)
         with chainer.no_backprop_mode(), chainer.using_config('train', False):
-            exs = [[F.expand_dims(self.xp.array(self.w2vec[w], dtype=self.xp.float32), axis=0)\
-                    if w not in self.w2id.keys() and w in self.w2vec.keys() \
-                    else self.embed(self.xp.array([self.w2id.get(w, UNK)], dtype=self.xp.int32)) \
-                    for w in x[::-1]] for x in xs]
+            if self.pretrained_embed_path:
+                exs = []
+                for x in xs:
+                    ex = []
+                    for w in x[::-1]:
+                        if w not in self.w2id.keys() and w not in self.pretrain_w2id.keys() and w in self.w2vec.keys():
+                            ex.append(F.expand_dims(self.xp.array(self.w2vec[w], dtype=self.xp.float32), axis=0))
+                        elif w not in self.w2id.keys() and w in self.pretrain_w2id.keys():
+                            wid = F.concat([self.xp.array([self.pretrain_w2id[w]], dtype=self.xp.int32)], axis=0)
+                            ex.append(self.pretrained_embed(wid))
+                        else:
+                            ex.append(self.embed(self.xp.array([self.w2id.get(w, UNK)], dtype=self.xp.int32)))
+                    exs.append(ex)
+            else:
+                exs = [[F.expand_dims(self.xp.array(self.w2vec[w], dtype=self.xp.float32), axis=0)\
+                        if w not in self.w2id.keys() and w in self.w2vec.keys() \
+                        else self.embed(self.xp.array([self.w2id.get(w, UNK)], dtype=self.xp.int32)) \
+                        for w in x[::-1]] for x in xs]
             exs = [F.concat(x, axis=0) for x in exs]
-            
+
             h, c, ehs = self.encoder(None, None, exs)
-            
+
             ys = self.xp.full(batchsize, EOS, dtype=self.xp.int32)
             if self.use_label_in:
                 ls1 = self.xp.full(batchsize, EOL1, dtype=self.xp.int32)
@@ -348,7 +367,6 @@ class Model(chainer.Chain):
                     eys = F.concat(eys, axis=0)
                     eys = self.W_in(eys)
                     eys = F.split_axis(eys, batchsize, axis=0)
-                    
                 else:
                     eys = F.split_axis(eys, batchsize, axis=0)
                     
@@ -363,6 +381,8 @@ class Model(chainer.Chain):
                 if self.use_rnn3:
                     h_l, c_l, lhs = self.decoder2(h_l, c_l, dhs)
                     concat_lhs = F.concat(lhs, axis=0)
+                elif self.use_label_in:
+                    concat_lhs = concat_yhs
                 else:
                     concat_lhs = F.concat(dhs, axis=0)
                 ls1 = self.xp.argmax(self.W_l1(concat_lhs).data, axis=1).astype(self.xp.int32)
