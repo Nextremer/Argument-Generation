@@ -3,18 +3,22 @@
 # created at 2018-10-10
 import pickle
 import argparse
+import collections
 from collections import defaultdict
 import time
+import random
 from nltk.translate import bleu_score
 
 from utils import *
 from model import *
 
 
+
 def load_data(path):
     with open(path, 'rb') as f:
         d = pickle.load(f)
     return d
+
 
 
 def get_train_test_idxs(path):
@@ -31,92 +35,97 @@ def get_train_test_idxs(path):
     return train_idxs, test_idxs
 
 
-def calculateBleu(hypothesis, reference):
-    references = [reference]
-    list_of_references = [references]
-    list_of_hypotheses = [hypothesis]
-    bleu = bleu_score.corpus_bleu(list_of_references, list_of_hypotheses, \
-                                  smoothing_function=bleu_score.SmoothingFunction().method1)
-
-    return bleu
-            
 
 def main(args):
     # save args
     if args.save_dir:
         save_args(args.save_dir, args)
-            
+
+    # w2vec(glove.6B)
+    with open(args.w2vec_path, 'r') as f:
+        w2vec = {line.strip().split(' ')[0]: np.array(line.strip().split(' ')[1:], dtype=np.float32) for line in f}
+
     # load data(tokenized word) 
     topics = load_data(args.data_dir+'topics.pickle')
     contexts = load_data(args.data_dir+'contexts.pickle')
     type_seqs = load_data(args.data_dir+'type_seqs.pickle')
     rel_seqs = load_data(args.data_dir+'rel_seqs.pickle')
     dist_seqs = load_data(args.data_dir+'dist_seqs.pickle')
-    
+
     # train, test idxs
     train_idxs, test_idxs = get_train_test_idxs(args.idx_path)
-    
-    # train, dev idxs
-    train_idxs, dev_idxs = train_idxs[:args.train_size], train_idxs[args.train_size:]
-    
-    # train, dev, test size
-    train_size = len(train_idxs)
-    dev_size = len(dev_idxs)
-    test_size = len(test_idxs)
 
-    # word2vec
-    f = open(args.w2vec_path, 'r')
-    w2vec = {line.strip().split(' ')[0]: np.array(line.strip().split(' ')[1:], dtype=np.float32) for line in f}
-    
+    # train, dev idxs
+    train_idxs, dev_idxs = train_idxs[:args.stab_train_size], train_idxs[args.stab_train_size:]
+
+    # Monolingual language model(mlm) data(train)
+    if args.mlm_train_data_path:
+        with open(args.mlm_train_data_path, 'rb') as f:
+            train_xs = pickle.load(f)
+
+    train_contexts = [contexts[idx] for idx in train_idxs]
+    train_xs.extend(train_contexts)
+
+    train_xs_flatten = [w for x in train_xs for w in x]
+    counter = collections.Counter(train_xs_flatten)
+    count_words = counter.most_common()
+
+    # vocab_size most frequent words
+    freq_words = [i[0] for i in count_words[:args.vocab_size]]
+
+    pretrain_w2id = defaultdict(lambda: len(pretrain_w2id))
+
+    pretrain_w2id['bos']
+    pretrain_w2id['eos']
+    pretrain_w2id['unk']
+
+    # make dict from frequent words
+    get_wid_seq(freq_words, pretrain_w2id, is_make=True)
+
+    pretrain_w2id = dict(pretrain_w2id)
+    pretrain_id2w = {v: k for k, v in pretrain_w2id.items()}
+
     # w2id
     w2id = defaultdict(lambda: len(w2id))
 
-    # train, dev, test split
+    # shuffle train data
+    random.seed(12345)
+    random.shuffle(train_idxs)
+
+    # train id sequence
     train_topics = [get_wid_seq(topics[idx], w2id, is_make=True) for idx in train_idxs]
     train_contexts = [get_wid_seq(contexts[idx], w2id, is_make=True) for idx in train_idxs]
     train_type_seqs = [np.array(type_seqs[idx], dtype=np.int32) for idx in train_idxs]
     train_rel_seqs = [np.array(rel_seqs[idx], dtype=np.int32) for idx in train_idxs]
     train_dist_seqs = [np.array(dist_seqs[idx], dtype=np.int32) for idx in train_idxs]
-    
-    idxs = sorted(np.arange(0, train_size), key=lambda x: len(train_contexts[x]), reverse=True)
-    train_topics = [train_topics[idx] for idx in idxs]
-    train_contexts = [train_contexts[idx] for idx in idxs]
-    train_type_seqs = [train_type_seqs[idx] for idx in idxs]
-    train_rel_seqs = [train_rel_seqs[idx] for idx in idxs]
-    train_dist_seqs = [train_dist_seqs[idx] for idx in idxs]
-    
+
+    # w2id, id2w
+    w2id = dict(w2id)
+    id2w = {v: k for k, v in w2id.items()}
+
     dev_topics = [topics[idx] for idx in dev_idxs]
     dev_contexts = [contexts[idx] for idx in dev_idxs]
     dev_type_seqs = [np.array(type_seqs[idx], dtype=np.int32) for idx in dev_idxs]
     dev_rel_seqs = [np.array(rel_seqs[idx], dtype=np.int32) for idx in dev_idxs]
     dev_dist_seqs = [np.array(dist_seqs[idx], dtype=np.int32) for idx in dev_idxs]
-    
-    idxs = sorted(np.arange(0, dev_size), key=lambda x: len(dev_contexts[x]), reverse=True)
-    dev_topics = [dev_topics[idx] for idx in idxs]
-    dev_contexts = [dev_contexts[idx] for idx in idxs]
-    dev_type_seqs = [dev_type_seqs[idx] for idx in idxs]
-    dev_rel_seqs = [dev_rel_seqs[idx] for idx in idxs]
-    dev_dist_seqs = [dev_dist_seqs[idx] for idx in idxs]
 
     test_topics = [topics[idx] for idx in test_idxs]
     test_contexts = [contexts[idx] for idx in test_idxs]
     test_type_seqs = [np.array(type_seqs[idx], dtype=np.int32) for idx in test_idxs]
     test_rel_seqs = [np.array(rel_seqs[idx], dtype=np.int32) for idx in test_idxs]
     test_dist_seqs = [np.array(dist_seqs[idx], dtype=np.int32) for idx in test_idxs]
-    
-    idxs = sorted(np.arange(0, test_size), key=lambda x: len(test_contexts[x]), reverse=True)
-    test_topics = [test_topics[idx] for idx in idxs]
-    test_contexts = [test_contexts[idx] for idx in idxs]
-    test_type_seqs = [test_type_seqs[idx] for idx in idxs]
-    test_rel_seqs = [test_rel_seqs[idx] for idx in idxs]
-    test_dist_seqs = [test_dist_seqs[idx] for idx in idxs]
-    
-    # id2w
-    w2id = dict(w2id)
-    id2w = {v: k for k, v in w2id.items()}
-    
+
+    # train, dev, test size
+    train_size = len(train_topics)
+    dev_size = len(dev_topics)
+    test_size = len(test_topics)
+
+    assert len(train_topics) == len(train_contexts) == len(train_type_seqs) == len(train_rel_seqs) == len(train_dist_seqs)
+    assert len(dev_topics) == len(dev_contexts) == len(dev_type_seqs) == len(dev_rel_seqs) == len(dev_dist_seqs)
+    assert len(test_topics) == len(test_contexts) == len(test_type_seqs) == len(test_rel_seqs) == len(test_dist_seqs)
+
     # define model
-    model = Model(args, w2id, id2w, w2vec)
+    model = Model(args, w2id, id2w, pretrain_w2id, pretrain_id2w, w2vec)
 
     # Use GPU
     if args.gpu >= 0:
@@ -127,21 +136,22 @@ def main(args):
     optimizer = optimizers.Adam()
     optimizer.setup(model)
     optimizer.add_hook(chainer.optimizer.GradientClipping(args.threshold))
-    optimizer.add_hook(chainer.optimizer.WeightDecay(args.learning_rate))
-    
+    optimizer.add_hook(chainer.optimizer.WeightDecay(args.rate))
+
     # initialize reporter
     train_loss_w_reporter = ScoreReporter(args.mb_size, train_size)
     train_loss_label_reporter = ScoreReporter(args.mb_size, train_size)
     train_loss_reporter = ScoreReporter(args.mb_size, train_size)
-    train_bleu_reporter = ScoreReporter(args.mb_size, train_size)
-    
+
     train_mean_losses_w = []
     train_mean_losses_label = []
     train_mean_losses = []
-    train_mean_bleus = []
-    dev_mean_bleus = []
-    
-    # train dev loop
+
+    train_bleus = []
+    dev_bleus = []
+    test_bleus = []
+
+    # train, dev, test loop
     for epoch in range(args.max_epoch):
         print('epoch: {}'.format(epoch+1))
         start_time = time.time()
@@ -151,120 +161,161 @@ def main(args):
             train_type_mb = train_type_seqs[mb:mb+args.mb_size]
             train_rel_mb = train_rel_seqs[mb:mb+args.mb_size]
             train_dist_mb = train_dist_seqs[mb:mb+args.mb_size]
-            
+
             model.cleargrads()
-            loss1, loss2, loss = model(train_topic_mb, train_context_mb, (train_type_mb, train_rel_mb, train_dist_mb))
-            train_loss_w_reporter.add(backends.cuda.to_cpu(loss1.data))
-            train_loss_label_reporter.add(backends.cuda.to_cpu(args.eta*loss2.data))
+            loss_w, loss_label, loss = model(train_topic_mb, train_context_mb, (train_type_mb, train_rel_mb, train_dist_mb))
+            train_loss_w_reporter.add(backends.cuda.to_cpu(loss_w.data))
+            train_loss_label_reporter.add(backends.cuda.to_cpu(loss_label.data))
             train_loss_reporter.add(backends.cuda.to_cpu(loss.data))
             loss.backward()
             optimizer.update()
-        
-        train_mean_losses_w.append(train_loss_w_reporter.mean())
-        train_mean_losses_label.append(train_loss_label_reporter.mean())
-        train_mean_losses.append(train_loss_reporter.mean())
-        print('train mean loss(word): {}'.format(train_loss_w_reporter.mean()))
-        print('train mean loss(eta*loss_label): {}'.format(train_loss_label_reporter.mean()))
-        print('train mean loss: {}'.format(train_loss_reporter.mean()))
-        
-        train_mean_bleu = 0
-        # generate argument(train)
-        for mb in range(0, train_size, args.mb_size):
-            topic = ''
-            for w in topics[train_idxs[mb]]:
-                topic += w
-                topic += ' '
-            train_idx_mb = train_idxs[mb:mb+args.mb_size]
-            train_topics_mb = [topics[idx] for idx in train_idx_mb]
-            arguments = model.generate(train_topics_mb, args.max_length)
-            
-            outs = []
-            for i, argument in enumerate(arguments):
-                bleu = calculateBleu(argument, contexts[train_idxs[mb+i]])
-                train_mean_bleu += bleu
-                out = ''
-                for w in argument:
-                    out += w
-                    out += ' '  
-                outs.append(out)
-                
-            print('-'*100)
-            print('train')
-            print('topic:')
-            print(topic)
-            print('generated argument:')
-            print(outs[0])
-            
-            if args.save_dir:
-                with open(args.save_dir+'arguments.txt', 'a') as f:
-                    f.write('-'*50+'\n')
-                    f.write('train\n')
-                    f.write('epoch: '+str(epoch+1)+'\n')
-                    f.write('topic: '+topic+'\n')
-                    f.write('argument: '+outs[0]+'\n')
-            
-        train_mean_bleu /= float(train_size)
-        print('train mean bleu: '+str(train_mean_bleu))
-        train_mean_bleus.append(train_mean_bleu)
-                    
+
+        train_mean_loss_w = train_loss_w_reporter.mean()
+        train_mean_loss_label = train_loss_label_reporter.mean()
+        train_mean_loss = train_loss_reporter.mean()
+
+        train_mean_losses_w.append(train_mean_loss_w)
+        train_mean_losses_label.append(train_mean_loss_label)
+        train_mean_losses.append(train_mean_loss)
+        print('train mean loss(word): {}'.format(train_mean_loss_w))
+        print('train mean loss(label): {}'.format(train_mean_loss_label))
+        print('train mean loss(word+eta*label): {}'.format(train_mean_loss))
+
         # initialize train reporter
         train_loss_w_reporter = ScoreReporter(args.mb_size, train_size)
         train_loss_label_reporter = ScoreReporter(args.mb_size, train_size)
         train_loss_reporter = ScoreReporter(args.mb_size, train_size)
 
-        dev_mean_bleu = 0
+        # generate argument(train)
+        hypothesis = []
+        references = []
+        for mb in range(0, train_size, args.mb_size):
+            train_idx_mb = train_idxs[mb:mb+args.mb_size]
+            train_topic_mb = [topics[idx] for idx in train_idx_mb]
+            train_context_mb = [contexts[idx] for idx in train_idx_mb]
+
+            arguments = model.generate(train_topic_mb, args.max_length)
+            hypothesis.extend(arguments)
+            references.extend([[ref] for ref in train_context_mb])
+
+            topic = ' '.join(train_topic_mb[0])
+            out = ' '.join(arguments[0])
+
+            if args.save_dir:
+                with open(args.save_dir+'arguments.txt', 'a') as f:
+                    f.write('-'*100)
+                    f.write('train')
+                    f.write('epoch: '+str(epoch+1))
+                    f.write('topic:')
+                    f.write(topic)
+                    f.write('generated argument:')
+                    f.write(out)
+
+            print('-'*100)
+            print('train')
+            print('topic:')
+            print(topic)
+            print('generated argument:')
+            print(out)
+
+        train_bleu = bleu_score.corpus_bleu(references, hypothesis, \
+                                            smoothing_function=bleu_score.SmoothingFunction().method1)
+
+        print('train bleu: '+str(train_bleu))
+        train_bleus.append(train_bleu)
+
         # generate argument(dev)
+        hypothesis = []
+        references = []
         for mb in range(0, dev_size, args.mb_size):
             dev_idx_mb = dev_idxs[mb:mb+args.mb_size]
-            dev_topics_mb = [topics[idx] for idx in dev_idx_mb]
-            arguments = model.generate(dev_topics_mb, args.max_length)
+            dev_topic_mb = [topics[idx] for idx in dev_idx_mb]
+            dev_context_mb = [contexts[idx] for idx in dev_idx_mb]
 
-            outs = []
-            for i, argument in enumerate(arguments):
-                topic = ''
-                for w in topics[dev_idxs[mb+i]]:
-                    topic += w
-                    topic += ' '
-                bleu = calculateBleu(argument, contexts[dev_idxs[mb+i]])
-                dev_mean_bleu += bleu
-                out = ''
-                for w in argument:
-                    out += w
-                    out += ' '
+            arguments = model.generate(dev_topic_mb, args.max_length)
+            hypothesis.extend(arguments)
+            references.extend([[ref] for ref in dev_context_mb])
+
+            for argument, dev_topic in zip(arguments, dev_topic_mb):
+                topic = ' '.join(dev_topic)
+                out = ' '.join(argument)
+
                 if args.save_dir:
                     with open(args.save_dir+'arguments.txt', 'a') as f:
-                        f.write('-'*50+'\n')
-                        f.write('dev\n')
-                        f.write('epoch: '+str(epoch+1)+'\n')
-                        f.write('topic: '+topic+'\n')
-                        f.write('argument: '+out+'\n')
-                outs.append(out)
+                        f.write('-'*100)
+                        f.write('dev')
+                        f.write('epoch: '+str(epoch+1))
+                        f.write('topic:')
+                        f.write(topic)
+                        f.write('argument:')
+                        f.write(out)
 
             print('-'*100)
             print('dev')
             print('topic:')
             print(topic)
             print('generated argument:')
-            print(outs[0])
+            print(out)
 
-        dev_mean_bleu /= float(dev_size)
-        dev_mean_bleus.append(dev_mean_bleu)
-        print('dev mean bleu: '+str(dev_mean_bleu))
-                    
+        dev_bleu = bleu_score.corpus_bleu(references, hypothesis, \
+                                          smoothing_function=bleu_score.SmoothingFunction().method1)
+
+        print('dev bleu: '+str(dev_bleu))
+        dev_bleus.append(dev_bleu)
+
+        # generate argument(test)
+        hypothesis = []
+        references = []
+        for mb in range(0, test_size, args.mb_size):
+            test_idx_mb = test_idxs[mb:mb+args.mb_size]
+            test_topic_mb = [topics[idx] for idx in test_idx_mb]
+            test_context_mb = [contexts[idx] for idx in test_idx_mb]
+
+            arguments = model.generate(test_topic_mb, args.max_length)
+            hypothesis.extend(arguments)
+            references.extend([[ref] for ref in test_context_mb])
+
+            for argument, test_topic in zip(arguments, test_topic_mb):
+                topic = ' '.join(test_topic)
+                out = ' '.join(argument)
+
+                if args.save_dir:
+                    with open(args.save_dir+'arguments.txt', 'a') as f:
+                        f.write('-'*100)
+                        f.write('test')
+                        f.write('epoch: '+str(epoch+1))
+                        f.write('topic:')
+                        f.write(topic)
+                        f.write('argument:')
+                        f.write(out)
+
+            print('-'*100)
+            print('test')
+            print('topic:')
+            print(topic)
+            print('generated argument:')
+            print(out)
+
+        test_bleu = bleu_score.corpus_bleu(references, hypothesis, \
+                                           smoothing_function=bleu_score.SmoothingFunction().method1)
+        print('test bleu: '+str(test_bleu))
+        test_bleus.append(test_bleu)
+
         if args.save_dir:
             # save figs
             save_figs(\
                 args.save_dir, epoch+1, train_mean_losses, train_mean_losses_w, train_mean_losses_label, \
-                train_mean_bleus, dev_mean_bleus)
-            
-            np.savez(args.save_dir+'mean_bleus.npz', x=np.asarray(train_mean_bleus), y=np.asarray(dev_mean_bleus))
+                train_bleus, dev_bleus)
+
+            np.savez(args.save_dir+'bleus.npz', x=np.asarray(train_bleus), y=np.asarray(dev_bleus), \
+                     z=np.asarray(test_bleus))
             np.savez(args.save_dir+'mean_losses.npz', x=np.asarray(train_mean_losses), y=np.asarray(train_mean_losses_w), \
                      z=np.asarray(train_mean_losses_label))
 
         end_time = time.time()
-        print('elapsed time:{}'.format(end_time-start_time))
+        print('elapsed time per one iter:{}'.format(end_time-start_time))
 
-    
+
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser(description='Train argument generator')
@@ -272,7 +323,9 @@ if __name__ == '__main__':
     parser.add_argument('--idx_path', help='train test idx file')
     parser.add_argument('--save_dir', help='save figures directory')
     parser.add_argument('--w2vec_path', help='w2vec path')
-    parser.add_argument('--pretrained_model_path', help='pretrained model path')
+    parser.add_argument('--mlm_train_data_path', help='monolingual language model train data path')
+    parser.add_argument('--pretrained_decoder_path', help='pretrained decoder path')
+    parser.add_argument('--pretrained_embed_path', help='pretrained embed path')
     parser.add_argument('--gpu', type=int, default=-1, help='GPU ID (negative value indicates CPU)')
     parser.add_argument('--n_layers', type=int, default=3)
     parser.add_argument('--n_layers2', type=int, default=3)
@@ -281,14 +334,14 @@ if __name__ == '__main__':
     parser.add_argument('--eta', type=float, default=1.0)
     parser.add_argument('--max_epoch', type=int, default=20)
     parser.add_argument('--mb_size', type=int, default=16)
-    parser.add_argument('--train_size', type=int, default=300)
+    parser.add_argument('--stab_train_size', type=int, default=292)
     parser.add_argument('--dropout', type=float, default=0.5)
-    parser.add_argument('--max_length', type=int, default=100)
+    parser.add_argument('--max_length', type=int, default=150)
     parser.add_argument('--threshold', type=float, default=5.0)
-    parser.add_argument('--learning_rate', type=float, default=5e-4)
-    parser.add_argument('--use_pretrained_model', action='store_true')
+    parser.add_argument('--rate', type=float, default=5e-4)
+    parser.add_argument('--vocab_size', type=int, default=10000)
     parser.add_argument('--use_label_in', action='store_true')
     parser.add_argument('--use_rnn3', action='store_true')
     args = parser.parse_args()
-    
+
     main(args)
