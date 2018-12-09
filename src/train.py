@@ -221,7 +221,6 @@ def main(args):
         train_bleu = bleu_score.corpus_bleu(references, hypothesis, \
                                             smoothing_function=bleu_score.SmoothingFunction().method1)
 
-        print('train bleu: '+str(train_bleu))
         train_bleus.append(train_bleu)
 
         # generate argument(dev)
@@ -260,7 +259,6 @@ def main(args):
         dev_bleu = bleu_score.corpus_bleu(references, hypothesis, \
                                           smoothing_function=bleu_score.SmoothingFunction().method1)
 
-        print('dev bleu: '+str(dev_bleu))
         dev_bleus.append(dev_bleu)
 
         # generate argument(test)
@@ -298,6 +296,8 @@ def main(args):
 
         test_bleu = bleu_score.corpus_bleu(references, hypothesis, \
                                            smoothing_function=bleu_score.SmoothingFunction().method1)
+        print('train bleu: '+str(train_bleu))
+        print('dev bleu: '+str(dev_bleu))
         print('test bleu: '+str(test_bleu))
         test_bleus.append(test_bleu)
 
