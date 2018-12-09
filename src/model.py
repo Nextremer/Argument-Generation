@@ -158,7 +158,7 @@ class Model(chainer.Chain):
         n_label3 = 22
         l_n_units = 10
         
-        if args.use_pretrained_embed:
+        if args.pretrained_embed_path:
             PRETRAINED_EMBED_PATH = args.pretrained_embed_path
             self.pretrained_embed = Embed(pretrain_w2id, pretrain_id2w, w2vec, n_units)
             serializers.load_npz(PRETRAINED_EMBED_PATH, self.pretrained_embed)
@@ -195,14 +195,14 @@ class Model(chainer.Chain):
             
             self.attention = Attention(n_units, n_units, attn_n_units)
         
-            if args.use_pretrained_decoder:
+            if args.pretrained_decoder_path:
                 PRETRAINED_DECODER_PATH = args.pretrained_decoder_path
                 self.pretrained_decoder = Decoder(n_layers, n_units, dropout)
                 serializers.load_npz(PRETRAINED_DECODER_PATH, self.pretrained_decoder)
             else:
                 self.decoder1 = L.NStepLSTM(n_layers, n_units, n_units, dropout=dropout)                
                 
-        if args.use_pretrained_decoder and args.gpu >= 0:
+        if args.pretrained_decoder_path and args.gpu >= 0:
             backends.cuda.get_device(args.gpu).use()
             self.pretrained_decoder.to_gpu(args.gpu)
             
@@ -211,13 +211,13 @@ class Model(chainer.Chain):
         self.w2vec = w2vec
         
         self.eta = args.eta
-        self.use_pretrained_decoder = args.use_pretrained_decoder
+        self.pretrained_decoder_path = args.pretrained_decoder_path
         self.use_label_in = args.use_label_in
         self.use_rnn3 = args.use_rnn3
         self.dropout = args.dropout
 
     def __call__(self, xs, ys, ls):
-        lhs, ls1_out, ls2_out, ls3_out, concat_os, concat_ys_out = self.forward(xs, ys, ls)
+        lhs, ls1_out, ls2_out, ls3_out, concat_yhs, concat_ys_out = self.forward(xs, ys, ls)
         if self.use_label_in:
             lhs = [lh[:-1] for lh in lhs]
             ls1_out = [ls[:-1] for ls in ls1_out]
@@ -235,7 +235,7 @@ class Model(chainer.Chain):
         concat_ls3_out = F.concat(ls3_out, axis=0)
         
         batchsize = len(xs)
-        loss_w = F.sum(F.softmax_cross_entropy(self.W_y(concat_os), concat_ys_out, reduce='no'))/batchsize
+        loss_w = F.sum(F.softmax_cross_entropy(self.W_y(concat_yhs), concat_ys_out, reduce='no'))/batchsize
         loss_l1 = F.sum(F.softmax_cross_entropy(self.W_l1(concat_lhs), concat_ls1_out, reduce='no'))/batchsize
         loss_l2 = F.sum(F.softmax_cross_entropy(self.W_l2(concat_lhs), concat_ls2_out, reduce='no'))/batchsize
         loss_l3 = F.sum(F.softmax_cross_entropy(self.W_l3(concat_lhs), concat_ls3_out, reduce='no'))/batchsize
@@ -266,7 +266,7 @@ class Model(chainer.Chain):
         # 埋め込み
         exs = self.sequence_embed(self.embed, xs)
         eys = self.sequence_embed(self.embed, ys_in)
-        
+
         if self.use_label_in:
             ls1_in = [F.concat([eol1, l], axis=0) for l in ls1]
             ls2_in = [F.concat([eol2, l], axis=0) for l in ls2]
@@ -280,7 +280,7 @@ class Model(chainer.Chain):
             els2 = self.sequence_embed(self.embed_l2, ls2_in)
             els3 = self.sequence_embed(self.embed_l3, ls3_in)
             eys = [F.concat([ey, el1, el2, el3], axis=1) for ey, el1, el2, el3 in zip(eys, els1, els2, els3)]
-            
+
             eys_len = [len(ey) for ey in eys]
             eys_section = np.cumsum(eys_len[:-1])
             eys = F.concat(eys, axis=0)
@@ -291,16 +291,14 @@ class Model(chainer.Chain):
             ls1_out = [F.concat([eol1, l], axis=0) for l in ls1]
             ls2_out = [F.concat([eol2, l], axis=0) for l in ls2]
             ls3_out = [F.concat([eol3, l], axis=0) for l in ls3]
-        
-        assert len(ys_out) == len(ls1_out) == len(ls2_out) == len(ls3_out)
 
         h, c, ehs = self.encoder(None, None, exs)
 
-        if self.use_pretrained_decoder:
+        if self.pretrained_decoder_path:
             _, _, dhs = self.pretrained_decoder(h, c, eys)
         else:
             _, _, dhs = self.decoder1(h, c, eys)
-        
+
         dhs_len = [len(dh) for dh in dhs]
         dhs_section = np.cumsum(dhs_len[:-1])
         concat_dhs = F.concat(dhs, axis=0)
@@ -354,7 +352,7 @@ class Model(chainer.Chain):
                 else:
                     eys = F.split_axis(eys, batchsize, axis=0)
                     
-                if self.use_pretrained_model:
+                if self.pretrained_decoder_path:
                     h, c, dhs = self.pretrained_decoder(h, c, eys)
                 else:
                     h, c, dhs = self.decoder1(h, c, eys)
