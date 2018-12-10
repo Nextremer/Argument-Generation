@@ -203,13 +203,13 @@ def main(args):
 
             if args.save_dir:
                 with open(args.save_dir+'arguments.txt', 'a') as f:
-                    f.write('-'*100)
-                    f.write('train')
-                    f.write('epoch: '+str(epoch+1))
-                    f.write('topic:')
-                    f.write(topic)
-                    f.write('generated argument:')
-                    f.write(out)
+                    f.write('-'*100+'\n')
+                    f.write('train\n')
+                    f.write('epoch: '+str(epoch+1)+'\n')
+                    f.write('topic:\n')
+                    f.write(topic+'\n')
+                    f.write('argument:\n')
+                    f.write(out+'\n')
 
             print('-'*100)
             print('train')
@@ -241,13 +241,13 @@ def main(args):
 
                 if args.save_dir:
                     with open(args.save_dir+'arguments.txt', 'a') as f:
-                        f.write('-'*100)
-                        f.write('dev')
-                        f.write('epoch: '+str(epoch+1))
-                        f.write('topic:')
-                        f.write(topic)
-                        f.write('argument:')
-                        f.write(out)
+                        f.write('-'*100+'\n')
+                        f.write('dev\n')
+                        f.write('epoch: '+str(epoch+1)+'\n')
+                        f.write('topic:\n')
+                        f.write(topic+'\n')
+                        f.write('argument:\n')
+                        f.write(out+'\n')
 
             print('-'*100)
             print('dev')
@@ -279,13 +279,13 @@ def main(args):
 
                 if args.save_dir:
                     with open(args.save_dir+'arguments.txt', 'a') as f:
-                        f.write('-'*100)
-                        f.write('test')
-                        f.write('epoch: '+str(epoch+1))
-                        f.write('topic:')
-                        f.write(topic)
-                        f.write('argument:')
-                        f.write(out)
+                        f.write('-'*100+'\n')
+                        f.write('test\n')
+                        f.write('epoch: '+str(epoch+1)+'\n')
+                        f.write('topic:\n')
+                        f.write(topic+'\n')
+                        f.write('argument:\n')
+                        f.write(out+'\n')
 
             print('-'*100)
             print('test')
