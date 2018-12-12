@@ -137,22 +137,32 @@ def main(args):
     optimizer.setup(model)
     optimizer.add_hook(chainer.optimizer.GradientClipping(args.threshold))
     optimizer.add_hook(chainer.optimizer.WeightDecay(args.rate))
+    
+    # resume training
+    if args.resume:
+        serializers.load_npz(args.saved_model_path, model)
+        serializers.load_npz(args.saved_opt_path, optimizer)
+        mean_losses = np.load(args.save_dir+'mean_losses.npz')
+        bleus = np.load(args.save_dir+'bleus.npz')
+        train_mean_losses, train_mean_losses_w, train_mean_losses_label = \
+        list(mean_losses['x']), list(mean_losses['y']), list(mean_losses['z'])
+        train_bleus, dev_bleus, test_bleus = list(bleus['x']), list(bleus['y']), list(bleus['z'])
+    else:
+        train_mean_losses_w = []
+        train_mean_losses_label = []
+        train_mean_losses = []
+        
+        train_bleus = []
+        dev_bleus = []
+        test_bleus = []
 
     # initialize reporter
     train_loss_w_reporter = ScoreReporter(args.mb_size, train_size)
     train_loss_label_reporter = ScoreReporter(args.mb_size, train_size)
     train_loss_reporter = ScoreReporter(args.mb_size, train_size)
 
-    train_mean_losses_w = []
-    train_mean_losses_label = []
-    train_mean_losses = []
-
-    train_bleus = []
-    dev_bleus = []
-    test_bleus = []
-
     # train, dev, test loop
-    for epoch in range(args.max_epoch):
+    for epoch in range(args.resume_epoch, args.max_epoch):
         print('epoch: {}'.format(epoch+1))
         start_time = time.time()
         for mb in range(0, train_size, args.mb_size):
@@ -306,7 +316,8 @@ def main(args):
             save_figs(\
                 args.save_dir, epoch+1, train_mean_losses, train_mean_losses_w, train_mean_losses_label, \
                 train_bleus, dev_bleus)
-
+            serializers.save_npz(args.save_dir+'model.'+str(epoch+1)+'.model', model)
+            serializers.save_npz(args.save_dir+'optimizer.'+str(epoch+1)+'.model', optimizer)
             np.savez(args.save_dir+'bleus.npz', x=np.asarray(train_bleus), y=np.asarray(dev_bleus), \
                      z=np.asarray(test_bleus))
             np.savez(args.save_dir+'mean_losses.npz', x=np.asarray(train_mean_losses), y=np.asarray(train_mean_losses_w), \
@@ -323,6 +334,8 @@ if __name__ == '__main__':
     parser.add_argument('--idx_path', help='train test idx file')
     parser.add_argument('--save_dir', help='save figures directory')
     parser.add_argument('--w2vec_path', help='w2vec path')
+    parser.add_argument('--saved_model_path')
+    parser.add_argument('--saved_opt_path')
     parser.add_argument('--mlm_train_data_path', help='monolingual language model train data path')
     parser.add_argument('--pretrained_decoder_path', help='pretrained decoder path')
     parser.add_argument('--pretrained_embed_path', help='pretrained embed path')
@@ -336,10 +349,12 @@ if __name__ == '__main__':
     parser.add_argument('--mb_size', type=int, default=16)
     parser.add_argument('--stab_train_size', type=int, default=292)
     parser.add_argument('--dropout', type=float, default=0.5)
-    parser.add_argument('--max_length', type=int, default=150)
+    parser.add_argument('--max_length', type=int, default=120)
     parser.add_argument('--threshold', type=float, default=5.0)
     parser.add_argument('--rate', type=float, default=5e-4)
     parser.add_argument('--vocab_size', type=int, default=10000)
+    parser.add_argument('--resume_epoch', type=int, default=0)
+    parser.add_argument('--resume', action='store_true')
     parser.add_argument('--use_label_in', action='store_true')
     parser.add_argument('--use_rnn3', action='store_true')
     args = parser.parse_args()
