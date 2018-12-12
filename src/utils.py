@@ -77,7 +77,7 @@ class ScoreReporter(object):
 
 
 def save_figs(save_dir, current_epoch, train_mean_losses, train_mean_losses_w, train_mean_losses_label, \
-              train_bleus, test_bleus):
+              train_bleus, dev_bleus):
     plt.switch_backend('agg')
     epoch = np.arange(1, current_epoch+1)
     fig = plt.figure(1)
@@ -95,7 +95,7 @@ def save_figs(save_dir, current_epoch, train_mean_losses, train_mean_losses_w, t
     plt.xlabel('epoch')
     plt.ylabel('bleu')
     plt.plot(epoch, train_bleus, label='bleu(train)')
-    plt.plot(epoch, test_bleus, label='bleu(dev)')
+    plt.plot(epoch, dev_bleus, label='bleu(dev)')
     plt.legend()
     plt.savefig(save_dir+'bleus.{}.png'.format(current_epoch))
 
