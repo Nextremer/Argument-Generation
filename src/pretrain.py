@@ -279,9 +279,9 @@ def main(args):
     if args.resume:
         serializers.load_npz(args.saved_model_path, model)
         serializers.load_npz(args.saved_opt_path, optimizer)
-        train_mean_losses = np.load(args.save_dir+'mean_losses.npz')['x']
+        train_mean_losses = list(np.load(args.save_dir+'mean_losses.npz')['x'])
         mean_perplexitys = np.load(args.save_dir+'mean_perplexitys.npz')
-        dev_mean_perplexitys, test_mean_perplexitys = mean_perplexitys['x'], mean_perplexitys['y']
+        dev_mean_perplexitys, test_mean_perplexitys = list(mean_perplexitys['x']), list(mean_perplexitys['y'])
     else:
         train_mean_losses = []
         dev_mean_perplexitys = []
