@@ -304,12 +304,6 @@ class Model(chainer.Chain):
         else:
             _, _, dhs = self.decoder1(h, c, eys)
 
-        dhs_len = [len(dh) for dh in dhs]
-        dhs_section = np.cumsum(dhs_len[:-1])
-        concat_dhs = F.concat(dhs, axis=0)
-        concat_dhs = F.dropout(concat_dhs, self.dropout)
-        dhs = F.split_axis(concat_dhs, dhs_section, axis=0)
-        
         yhs = self.attention(ehs, dhs)
         concat_yhs = F.concat(yhs, axis=0)
         
