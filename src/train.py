@@ -173,7 +173,8 @@ def main(args):
             train_dist_mb = train_dist_seqs[mb:mb+args.mb_size]
 
             model.cleargrads()
-            loss_w, loss_label, loss = model(train_topic_mb, train_context_mb, (train_type_mb, train_rel_mb, train_dist_mb))
+            loss_w, loss_label, loss = model(train_topic_mb, train_context_mb, \
+                                             (train_type_mb, train_rel_mb, train_dist_mb))
             train_loss_w_reporter.add(backends.cuda.to_cpu(loss_w.data))
             train_loss_label_reporter.add(backends.cuda.to_cpu(loss_label.data))
             train_loss_reporter.add(backends.cuda.to_cpu(loss.data))

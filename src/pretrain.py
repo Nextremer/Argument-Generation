@@ -336,7 +336,8 @@ def main(args):
             serializers.save_npz(args.save_dir+'language_model.'+str(epoch+1)+'.model', model)
             serializers.save_npz(args.save_dir+'optimizer.'+str(epoch+1)+'.model', optimizer)
             save_figs_(args.save_dir, epoch+1, train_mean_losses, dev_mean_perplexitys)
-            np.savez(args.save_dir+'mean_perplexitys.npz', x=np.asarray(dev_mean_perplexitys), y=np.asarray(test_mean_perplexitys))
+            np.savez(args.save_dir+'mean_perplexitys.npz', x=np.asarray(dev_mean_perplexitys), \
+                     y=np.asarray(test_mean_perplexitys))
             np.savez(args.save_dir+'mean_losses.npz', x=np.asarray(train_mean_losses))
 
         end = time.time()
