@@ -158,7 +158,7 @@ class Model(chainer.Chain):
         n_label3 = 22
         l_n_units = 10
         
-        if args.pretrained_embed_path and args.gpu >= 0:
+        if args.pretrained_embed_path:
             self.pretrained_embed = Embed(pretrain_w2id, pretrain_id2w, w2vec, n_units)
             serializers.load_npz(args.pretrained_embed_path, self.pretrained_embed)
 

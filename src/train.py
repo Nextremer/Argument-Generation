@@ -317,8 +317,8 @@ def main(args):
             save_figs(\
                 args.save_dir, epoch+1, train_mean_losses, train_mean_losses_w, train_mean_losses_label, \
                 train_bleus, dev_bleus)
-            serializers.save_npz(args.save_dir+'model.'+str(epoch+1)+'.model', model)
-            serializers.save_npz(args.save_dir+'optimizer.'+str(epoch+1)+'.model', optimizer)
+            #serializers.save_npz(args.save_dir+'model.'+str(epoch+1)+'.model', model)
+            #serializers.save_npz(args.save_dir+'optimizer.'+str(epoch+1)+'.model', optimizer)
             np.savez(args.save_dir+'bleus.npz', x=np.asarray(train_bleus), y=np.asarray(dev_bleus), \
                      z=np.asarray(test_bleus))
             np.savez(args.save_dir+'mean_losses.npz', x=np.asarray(train_mean_losses), y=np.asarray(train_mean_losses_w), \
